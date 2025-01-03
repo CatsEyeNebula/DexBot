@@ -3,38 +3,24 @@ import BN from "bn.js";
 
 import sol, { PublicKey } from "@solana/web3.js";
 import {
-    toToken,
     Raydium,
-    Percent,
     TxVersion,
-    PoolUtils,
-    TickUtils,
-    TokenAmount,
-    PoolFetchType,
-    PositionUtils,
-    CLMM_PROGRAM_ID,
-    TickArrayLayout,
-    PositionInfoLayout,
     ApiV3PoolInfoStandardItem,
-    ApiV3PoolInfoConcentratedItem,
-    getPdaPersonalPositionAddress,
     TxV0BuildData,
-    ApiV3PoolInfoItem,
-    PoolKeys,
-    AmmRpcData,
-    AmmV4Keys,
-    AmmV5Keys,
   } from "@raydium-io/raydium-sdk-v2";
+import { SolanaPoolTracker } from "./solanaPoolTracker";
 
 
 
 export class RaydiumClient extends BaseDexClient {
     
     address:string | undefined;
+    poolTracker: SolanaPoolTracker
     
     constructor(address?: string) {
         super();
         this.address = address;
+        this.poolTracker = new SolanaPoolTracker();
     }
 
     async getConnection(): Promise<sol.Connection> {
@@ -70,10 +56,22 @@ export class RaydiumClient extends BaseDexClient {
         let swap : TxV0BuildData;
 
         let pool_info: ApiV3PoolInfoStandardItem = {} as ApiV3PoolInfoStandardItem;
+        const pool = await this.poolTracker.waitingToGetPool();
 
+        pool_info.id = pool.id;
+        pool_info.programId = pool.programId;
+        pool_info.mintA = pool.mintA;
+        pool_info.mintB = pool.mintB;
+        pool_info.pooltype = [];
+
+        const computeBudgetConfig = {
+            units: 5000000,
+            microLamports: 1000000,
+          };
+      
         swap = await raydium.liquidity.swap({
             poolInfo: pool_info,
-            poolKeys: pool_key_info,
+            poolKeys: pool,
             amountIn: new BN(amount_in),
             amountOut: new BN(amount_out),
             fixedSide: "in",
@@ -81,8 +79,6 @@ export class RaydiumClient extends BaseDexClient {
             txVersion: TxVersion.V0,
             computeBudgetConfig: computeBudgetConfig,
           });
-
-          
           return 
       }
 

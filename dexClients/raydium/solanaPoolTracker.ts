@@ -28,7 +28,7 @@ export class SolanaPoolTracker {
             slotMap.get(slot).push(tx);
         });
 
-        const targetTransactions = [];
+        const targetTransactions: any[] = [];
         slotMap.forEach((txs) => {
             if (txs.length === 3) {
                 targetTransactions.push(...txs);
@@ -60,7 +60,7 @@ export class SolanaPoolTracker {
             await this.processTargetTransactions(targetTransactions);
             return;
         } catch (error) {
-            logger.error("Error fetching Signatures:", error);
+            // logger.error("Error fetching Signatures:", error);
         }
     }
 
@@ -86,7 +86,7 @@ export class SolanaPoolTracker {
             const targetTransactions = this.findTargetTransactions(signatures);
             return await this.processPoolInfo(targetTransactions);
         } catch (error) {
-            logger.error("Error fetching Signatures:", error);
+            // logger.error("Error fetching Signatures:", error);
         }
     }
 
@@ -108,17 +108,6 @@ export class SolanaPoolTracker {
         const poolAddress = initTx[2].pubkey;
         const poolInfo = this.constructPoolInfo(initTx, createAccountWithSeedTx);
         const poolInfoKey = `pool_key_info${poolAddress}`;
-
-        try {
-            const result = await this.redis.set(poolInfoKey, JSON.stringify(poolInfo));
-            if (result === "OK") {
-                logger.info(`Successfully stored pool info for key: ${poolInfoKey}`);
-            } else {
-                logger.warn(`Unexpected result from Redis for key: ${poolInfoKey}, result: ${result}`);
-            }
-        } catch (error) {
-            logger.error(`Error writing pool info to Redis for key: ${poolInfoKey}`, error);
-        }
         return poolInfo;
     }
 
@@ -202,16 +191,9 @@ export class SolanaPoolTracker {
             const res = await connection.getParsedTransactions(signatures, { maxSupportedTransactionVersion: 0 });
             return res;
         } catch (error) {
-            logger.error(`Error fetching details for transaction ${signatures}:`, error);
+            // logger.error(`Error fetching details for transaction ${signatures}:`, error);
             return null;
         }
-    }
-
-    async getPoolInRedis(poolAddress: string) {
-        const poolInfoKey = `pool_key_info${poolAddress}`;
-        const poolInfoStr = await this.redis.get(poolInfoKey);
-        const poolInfo = JSON.parse(poolInfoStr);
-        return poolInfo;
     }
 
     doTrack() {
@@ -241,16 +223,16 @@ export class SolanaPoolTracker {
                 const currentLamports = response.params?.result?.value?.lamports;
 
                 if (typeof currentLamports === "number") {
-                    logger.info("Current Lamports:", currentLamports);
+                    console.log("Current Lamports:", currentLamports);
 
                     if (this.previousLamports !== null) {
                         const lamportsChange = Math.abs(currentLamports - this.previousLamports);
                         const solChange = lamportsChange / LAMPORTS_PER_SOL;
 
-                        logger.info(`Change in SOL: ${solChange} SOL`);
+                        console.log(`Change in SOL: ${solChange} SOL`);
 
                         if (solChange > LIMIT_SOL_THRESHOLD) {
-                            logger.info(`ALERT: Lamports changed by ${solChange.toFixed(9)} SOL, exceeding threshold.`);
+                            console.log(`ALERT: Lamports changed by ${solChange.toFixed(9)} SOL, exceeding threshold.`);
                             this.fetchSignatures();
                         }
                     }
@@ -258,20 +240,20 @@ export class SolanaPoolTracker {
                     this.previousLamports = currentLamports;
                 }
             } catch (error) {
-                logger.error("Error processing message:", error);
+                console.log("Error processing message:", error);
             }
         });
 
         ws.on("error", (error) => {
-            logger.error("WebSocket error:", error);
+            console.log("WebSocket error:", error);
         });
 
         ws.on("close", () => {
-            logger.info("WebSocket connection closed.");
+            console.log("WebSocket connection closed.");
         });
     }
 
-    async waitingToGetPool() {
+    async waitingToGetPool() : Promise<any>{
         return new Promise((resolve, reject) => { 
             const ws = new WebSocket(WEBSOCKET_URL);
     
@@ -299,22 +281,22 @@ export class SolanaPoolTracker {
                     const currentLamports = response.params?.result?.value?.lamports;
     
                     if (typeof currentLamports === "number") {
-                        logger.info("Current Lamports:", currentLamports);
+                        console.log("Current Lamports:", currentLamports);
     
                         if (this.previousLamports !== null) {
                             const lamportsChange = Math.abs(currentLamports - this.previousLamports);
                             const solChange = lamportsChange / LAMPORTS_PER_SOL;
     
-                            logger.info(`Change in SOL: ${solChange} SOL`);
+                            console.log(`Change in SOL: ${solChange} SOL`);
     
                             if (solChange > LIMIT_SOL_THRESHOLD) {
-                                logger.info(`ALERT: Lamports changed by ${solChange.toFixed(9)} SOL, exceeding threshold.`);
+                                console.log(`ALERT: Lamports changed by ${solChange.toFixed(9)} SOL, exceeding threshold.`);
     
                                 try {
                                     const poolData = await this.getPool();
                                     ws.close();
                                     resolve(poolData);
-                                    logger.info(poolData);
+                                    console.log(poolData);
                                 } catch (error) {
                                     ws.close(); 
                                     reject(error); 
@@ -325,20 +307,20 @@ export class SolanaPoolTracker {
                         this.previousLamports = currentLamports;
                     }
                 } catch (error) {
-                    logger.error("Error processing message:", error);
+                    console.log("Error processing message:", error);
                     ws.close();
                     reject(error); // Reject the Promise on error
                 }
             });
     
             ws.on("error", (error) => {
-                logger.error("WebSocket error:", error);
+                console.log("WebSocket error:", error);
                 ws.close();
                 reject(error); // Reject the Promise on WebSocket error
             });
     
             ws.on("close", () => {
-                logger.info("WebSocket connection closed.");
+                console.log("WebSocket connection closed.");
             });
         });
     }

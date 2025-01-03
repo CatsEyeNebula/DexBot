@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "strict": true,
+        "strictNullChecks": false,   // 关闭 null 类型检查
+        "noImplicitAny": false,      // 允许隐式 any
+        "lib": ["dom", "esnext"],
+        "skipLibCheck": true,
+        "declaration": true,
+        "esModuleInterop": true
+    }
+}

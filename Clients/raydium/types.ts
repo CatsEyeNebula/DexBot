@@ -1,3 +1,5 @@
+import BN from "bn.js";
+
 export interface PoolKey {
   id: string;
   authority: string;
@@ -68,4 +70,22 @@ export interface GetPriceParams extends PairSymbol {
 export interface PoolAddress extends PairSymbol {
   address: string;
   publish_ts?: number;
+}
+
+export interface PoolInfo {
+  id: string;
+  programId: string;
+  mintA: {address: string; decimals: number};
+  mintB: {address: string; decimals: number};
+  pooltype: string[];
+}
+
+export interface BuildSwapInstructionParams {
+  token_in: string;
+  token_out: string;
+  amount_in: BN;
+  amount_out: BN;
+  token_address: string;
+  pool_keys: PoolKey;
+  pool_info: PoolInfo;
 }

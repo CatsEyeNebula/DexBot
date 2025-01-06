@@ -1,6 +1,6 @@
 import { BaseDexClient } from "../baseClient";
 import BN from "bn.js";
-import sol, { PublicKey } from "@solana/web3.js";
+import sol, { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import {
   Raydium,
   TxVersion,
@@ -9,13 +9,18 @@ import {
   PoolFetchType,
   AmmV4Keys,
   AmmV5Keys,
+  parseBigNumberish,
+  generatePubKey,
+  splAccountLayout,
+  makeAMMSwapInstruction,
 } from "@raydium-io/raydium-sdk-v2";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
 import { SONALA_RPC } from "../../constants";
-import { GetPriceParams, PairSymbol, PoolAddress, SIDE } from "./types";
+import { BuildSwapInstructionParams, GetPriceParams, PairSymbol, PoolAddress, SIDE } from "./types";
 import { calcAMMAmount } from "../../DEX/amm";
 import { RedisUtil } from "../../Utils/redis";
 import { DexPool } from "../../DEX/types";
+import { createAssociatedTokenAccountInstruction, createCloseAccountInstruction, createInitializeAccountInstruction, createTransferInstruction, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 export class RaydiumClient extends BaseDexClient {
   address: string | undefined;
@@ -254,6 +259,148 @@ export class RaydiumClient extends BaseDexClient {
     });
     const price = amm.price;
     return price;
+  }
+
+  async buildSwapInstruction(
+    params: BuildSwapInstructionParams,
+  ): Promise<sol.VersionedTransaction> {
+    const raydium = await this.getRaydiumsdk();
+    const connection = await this.getConnection();
+    const owner = raydium.account.scope.ownerPubKey;
+    const {
+      token_in,
+      token_out,
+      token_address,
+      amount_in,
+      amount_out,
+      pool_keys,
+      pool_info,
+    } = params;
+
+    const modifyComputeUnits = sol.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 5000000,
+    });
+    const addPriorityFee = sol.ComputeBudgetProgram.setComputeUnitPrice({
+      microLamports: 1000000,
+    });
+    const latestBlockhash = await connection.getLatestBlockhash();
+    let initialTx = new sol.Transaction({
+      recentBlockhash: latestBlockhash.blockhash,
+      feePayer: owner,
+    })
+      .add(modifyComputeUnits)
+      .add(addPriorityFee);
+
+    let instructions: TransactionInstruction[] = [];
+    let version = 4;
+    if (pool_info.pooltype.includes("StablePool")) version = 5;
+
+    const token_in_ata = await getAssociatedTokenAddress(
+      new sol.PublicKey(token_in),
+      owner,
+      true,
+    );
+    const token_out_ata = await getAssociatedTokenAddress(
+      new sol.PublicKey(token_out),
+      owner,
+      true,
+    );
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        owner,
+        token_in_ata,
+        owner,
+        new sol.PublicKey(token_in),
+      ),
+    );
+    // const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+    //   splAccountLayout.span,
+    //   "confirmed",
+    // );
+    const balanceNeeded = 3039280;
+    console.log(`balanceNeeded: ${balanceNeeded}`);
+    const lamports = parseBigNumberish(amount_in).add(new BN(balanceNeeded));
+    console.log(`getMinimumBalanceForRentExemption lamports: ${lamports}`)
+    const newAccount = generatePubKey({
+      fromPublicKey: owner,
+      programId: TOKEN_PROGRAM_ID,
+    });
+    instructions.push(
+      SystemProgram.createAccountWithSeed({
+        fromPubkey: owner,
+        basePubkey: owner,
+        seed: newAccount.seed,
+        newAccountPubkey: newAccount.publicKey,
+        lamports: lamports.toNumber(),
+        space: splAccountLayout.span,
+        programId: TOKEN_PROGRAM_ID,
+      }),
+    );
+    instructions.push(
+      createInitializeAccountInstruction(
+        newAccount.publicKey,
+        new sol.PublicKey(this.native_token),
+        owner,
+      ),
+    );
+    instructions.push(
+      createTransferInstruction(
+        newAccount.publicKey,
+        token_in_ata,
+        owner,
+        BigInt(String(amount_in)),
+      ),
+    );
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        owner,
+        token_out_ata,
+        owner,
+        new sol.PublicKey(token_out),
+      ),
+    );
+    instructions.push(
+      makeAMMSwapInstruction({
+        version,
+        poolKeys: pool_keys as any,
+        userKeys: {
+          tokenAccountIn: token_in_ata!,
+          tokenAccountOut: token_out_ata!,
+          owner: owner,
+        },
+        amountIn: amount_in,
+        amountOut: amount_out,
+        fixedSide: "in",
+      }),
+    );
+    instructions.push(
+      createCloseAccountInstruction(
+        newAccount.publicKey,
+        owner,
+        owner,
+        [],
+        TOKEN_PROGRAM_ID,
+      ),
+    );
+    instructions.push(
+      createCloseAccountInstruction(
+        token_in_ata,
+        owner,
+        owner,
+        [],
+        TOKEN_PROGRAM_ID,
+      ),
+    );
+    instructions.forEach((instruction) => {
+      initialTx.add(instruction);
+    });
+    const messageV0 = new sol.TransactionMessage({
+      payerKey: owner,
+      recentBlockhash: latestBlockhash.blockhash,
+      instructions: initialTx.instructions,
+    }).compileToV0Message();
+    const versionedTransaction = new sol.VersionedTransaction(messageV0);
+    return versionedTransaction;
   }
 
   // 没有给jito小费

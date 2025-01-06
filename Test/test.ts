@@ -1,10 +1,10 @@
-import { SolanaPoolTracker } from "../dexClients/raydium/solanaPoolTracker";
+// import { SolanaPoolTracker } from "../DexClients/raydium/solanaPoolTracker";
 
-const test = async () => {
-  const client = new SolanaPoolTracker();
-  await client.run();
-};
+// const test = async () => {
+//   const client = new SolanaPoolTracker();
+//   await client.run();
+// };
 
-if (require.main === module) {
-  test();
-}
+// if (require.main === module) {
+//   test();
+// }

@@ -1,0 +1,1 @@
+export const SONALA_RPC = "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e"

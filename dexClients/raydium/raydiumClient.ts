@@ -13,7 +13,6 @@ import { SolanaPoolTracker } from "./solanaPoolTracker";
 
 
 export class RaydiumClient extends BaseDexClient {
-    
     address:string | undefined;
     poolTracker: SolanaPoolTracker
     

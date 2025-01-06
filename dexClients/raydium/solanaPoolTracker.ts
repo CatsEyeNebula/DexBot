@@ -15,7 +15,7 @@ export class SolanaPoolTracker {
     rpc: string;
 
     constructor() {
-        this.rpc = ""
+        this.rpc = "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e";
     }
 
     findTargetTransactions(transactions: any) {
@@ -95,6 +95,7 @@ export class SolanaPoolTracker {
         let createAccountWithSeedTx: ParsedMessageAccount[];
         const signatures: string[] = targetTransactions.map(transaction => transaction.signature);
         const datas = await this.fetchTransactionDetails(signatures);
+        console.log(signatures);
 
         for (const data of datas) {
             if (data.transaction.message.instructions[0]['parsed']['type'] !== 'transfer') {
@@ -107,6 +108,7 @@ export class SolanaPoolTracker {
         }
         const poolAddress = initTx[2].pubkey;
         const poolInfo = this.constructPoolInfo(initTx, createAccountWithSeedTx);
+        console.log(poolInfo);
         const poolInfoKey = `pool_key_info${poolAddress}`;
         return poolInfo;
     }
@@ -116,6 +118,7 @@ export class SolanaPoolTracker {
         let createAccountWithSeedTx: ParsedMessageAccount[];
         const signatures: string[] = targetTransactions.map(transaction => transaction.signature);
         const datas = await this.fetchTransactionDetails(signatures);
+        console.log(signatures);
 
         for (const data of datas) {
             if (data.transaction.message.instructions[0]['parsed']['type'] !== 'transfer') {

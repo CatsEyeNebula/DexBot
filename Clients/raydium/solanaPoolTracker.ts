@@ -47,7 +47,7 @@ export class SolanaPoolTracker {
                     method: "getSignaturesForAddress",
                     params: [
                         PUMO_MIGRATION_ADDRESS,
-                        { "limit": 10 }
+                        { "limit": 9 }
                     ],
                 },
                 {

@@ -1,4 +1,5 @@
 import BN from "bn.js";
+import { CHAIN_ID } from "../../types";
 
 export interface PoolKey {
   id: string;
@@ -25,10 +26,6 @@ export interface PoolKey {
   marketBaseVault: string;
   marketQuoteVault: string;
   marketAuthority: string;
-}
-
-export interface Reserves {
-  [token_address: string]: number;
 }
 
 export interface PairSymbol {
@@ -113,4 +110,16 @@ export interface SwapParams extends PairSymbol {
     support_fee?: boolean;
     price_check?: boolean;
   };
+}
+
+export interface Reserves {
+  [token_address: string]: number,
+  timestamp?: number;
+}
+
+export interface ClientParams {
+  chain_id?: CHAIN_ID;
+  owner_address: string;
+  private_key?: string;
+  rpc?: string;
 }

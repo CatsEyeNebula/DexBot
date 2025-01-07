@@ -10,6 +10,7 @@ export interface PoolKey {
     A: string;
     B: string;
   };
+  programId: string;
   marketProgramId: string;
   marketId: string;
   mintA: {

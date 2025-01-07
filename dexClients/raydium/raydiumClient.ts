@@ -24,6 +24,8 @@ import {
   GetPriceParams,
   PairSymbol,
   PoolAddress,
+  PoolInfo,
+  PoolKey,
   Reserves,
   SIDE,
   SwapParams,
@@ -41,7 +43,7 @@ import { RaydiumCreatePoolMonitor } from "./createPoolMonitor";
 import { RedisUtil } from "../../utils/redis";
 import { BaseDexClient } from "../baseClient";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
-import { DexPool } from "../../Amm/types";
+import { DexPool } from "../../amm/types";
 
 export class RaydiumClient extends BaseDexClient {
   owner_address: string | undefined;
@@ -53,11 +55,11 @@ export class RaydiumClient extends BaseDexClient {
   constructor(params: ClientParams) {
     super(params);
     this.poolTracker = new SolanaPoolTracker();
-    this.redis = new RedisUtil({
-      host: "localhost",
-      port: "6379",
-      db: 0,
-    });
+    // this.redis = new RedisUtil({
+    //   host: "localhost",
+    //   port: "6379",
+    //   db: 0,
+    // });
   }
 
   async getConnection(): Promise<sol.Connection> {
@@ -277,7 +279,7 @@ export class RaydiumClient extends BaseDexClient {
   }
 
   async buildSwapInstruction(
-    params: BuildSwapInstructionParams,
+    params: BuildSwapInstructionParams
   ): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     const connection = await this.getConnection();
@@ -313,20 +315,20 @@ export class RaydiumClient extends BaseDexClient {
     const token_in_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_in),
       owner,
-      true,
+      true
     );
     const token_out_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_out),
       new sol.PublicKey(recipient_address),
-      true,
+      true
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_in_ata,
         owner,
-        new sol.PublicKey(token_in),
-      ),
+        new sol.PublicKey(token_in)
+      )
     );
     // const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
     //   splAccountLayout.span,
@@ -349,30 +351,30 @@ export class RaydiumClient extends BaseDexClient {
         lamports: lamports.toNumber(),
         space: splAccountLayout.span,
         programId: TOKEN_PROGRAM_ID,
-      }),
+      })
     );
     instructions.push(
       createInitializeAccountInstruction(
         newAccount.publicKey,
         new sol.PublicKey(this.native_token),
-        owner,
-      ),
+        owner
+      )
     );
     instructions.push(
       createTransferInstruction(
         newAccount.publicKey,
         token_in_ata,
         owner,
-        BigInt(String(amount_in)),
-      ),
+        BigInt(String(amount_in))
+      )
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_out_ata,
         new sol.PublicKey(recipient_address),
-        new sol.PublicKey(token_out),
-      ),
+        new sol.PublicKey(token_out)
+      )
     );
     instructions.push(
       makeAMMSwapInstruction({
@@ -386,7 +388,7 @@ export class RaydiumClient extends BaseDexClient {
         amountIn: amount_in,
         amountOut: amount_out,
         fixedSide: "out",
-      }),
+      })
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -394,8 +396,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID,
-      ),
+        TOKEN_PROGRAM_ID
+      )
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -403,8 +405,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID,
-      ),
+        TOKEN_PROGRAM_ID
+      )
     );
     instructions.forEach((instruction) => {
       initialTx.add(instruction);
@@ -513,45 +515,36 @@ export class RaydiumClient extends BaseDexClient {
     return version_tx;
   }
 
-  async snipe(amount_in: number): Promise<sol.VersionedTransaction> {
+  async snipe(params: {
+    amount_in: number;
+    pool_key: PoolKey;
+  }): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
-    let swap: TxV0BuildData;
+    const { amount_in, pool_key } = params;
 
-    let pool_info: ApiV3PoolInfoStandardItem = {} as ApiV3PoolInfoStandardItem;
-    const pool = await this.poolTracker.waitingToGetPool();
-
-    pool_info.id = pool.id;
-    pool_info.programId = pool.programId;
-    pool_info.mintA = pool.mintA; //wsol
-    pool_info.mintB = pool.mintB;
+    let pool_info: PoolInfo;
+    pool_info.id = pool_key.id;
+    pool_info.programId = pool_key.programId;
+    pool_info.mintA = pool_key.mintA;
+    pool_info.mintB = pool_key.mintB;
     pool_info.pooltype = [];
 
-    const computeBudgetConfig = {
-      units: 5000000,
-      microLamports: 1000000,
-    };
+    const amount_in_bg = Math.floor(
+      amount_in * Math.pow(10, pool_info.mintA.decimals)
+    );
 
-    amount_in = Math.floor(amount_in * Math.pow(10, pool_info.mintA.decimals));
-
-    // swap = await raydium.liquidity.swap({
-    //   poolInfo: pool_info,
-    //   poolKeys: pool,
-    //   amountIn: new BN(amount_in),
-    //   amountOut: new BN(0),
-    //   fixedSide: "in",
-    //   inputMint: pool_info.mintB.address,
-    //   txVersion: TxVersion.V0,
-    //   computeBudgetConfig: computeBudgetConfig,
-    // });
+    const token_in = pool_info.mintA.address;
+    const token_out = pool_info.mintB.address;
+    const owner = raydium.account.scope.ownerPubKey;
 
     const version_tx = await this.buildSwapInstruction({
-      token_in: mintIn,
-      token_out: pool_info,
-      amount_in: new BN(amount_in),
+      token_in: token_in,
+      token_out: token_out,
+      amount_in: new BN(amount_in_bg),
       amount_out: new BN(0),
-      recipient_address: recipient_address,
+      recipient_address: owner.toBase58(),
       pool_info: pool_info,
-      pool_keys: pool,
+      pool_keys: pool_key,
     });
     return version_tx;
   }

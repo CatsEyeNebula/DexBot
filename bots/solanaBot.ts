@@ -19,17 +19,7 @@ const run = async () => {
   const secretKey = bs58.decode(privateKey);
   const keypair = Keypair.fromSecretKey(secretKey);
 
-  const params = {
-    token_a: pool_key_info.mintB.address,
-    token_b: "So11111111111111111111111111111111111111112",
-    side: SIDE.BUY,
-    amount: 1000,
-    is_token_b_amount: false,
-    slippage: 0.5,
-    recipient_address: "2P93ZPcq6zxGbUyTYUqhSyY9qfJWCczEPt1EPEQM3nNZ",
-  };
-
-  const snipe_tx = await raydium.snipe(0.01);
+  const snipe_tx = await raydium.snipe({amount_in: 0.01, pool_key: pool_key_info});
   snipe_tx.sign([keypair]);
 
   const rawTransaction = snipe_tx.serialize();

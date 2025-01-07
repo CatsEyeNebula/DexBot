@@ -531,17 +531,29 @@ export class RaydiumClient extends BaseDexClient {
       microLamports: 1000000,
     };
 
-    swap = await raydium.liquidity.swap({
-      poolInfo: pool_info,
-      poolKeys: pool,
-      amountIn: new BN(amount_in),
-      amountOut: new BN(0),
-      fixedSide: "in",
-      inputMint: pool_info.mintB.address,
-      txVersion: TxVersion.V0,
-      computeBudgetConfig: computeBudgetConfig,
+    amount_in = Math.floor(amount_in * Math.pow(10, pool_info.mintA.decimals));
+
+    // swap = await raydium.liquidity.swap({
+    //   poolInfo: pool_info,
+    //   poolKeys: pool,
+    //   amountIn: new BN(amount_in),
+    //   amountOut: new BN(0),
+    //   fixedSide: "in",
+    //   inputMint: pool_info.mintB.address,
+    //   txVersion: TxVersion.V0,
+    //   computeBudgetConfig: computeBudgetConfig,
+    // });
+
+    const version_tx = await this.buildSwapInstruction({
+      token_in: mintIn,
+      token_out: pool_info,
+      amount_in: new BN(amount_in),
+      amount_out: new BN(0),
+      recipient_address: recipient_address,
+      pool_info: pool_info,
+      pool_keys: pool,
     });
-    return swap.transaction;
+    return version_tx;
   }
 
   async sellAll() {

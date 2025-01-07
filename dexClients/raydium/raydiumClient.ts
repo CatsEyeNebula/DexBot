@@ -28,8 +28,7 @@ import {
   SIDE,
   SwapParams,
 } from "./types";
-import { calcAMMAmount } from "../../Amm/amm";
-import { DexPool } from "../../Amm/types";
+import { calcAMMAmount } from "../../amm/amm";
 import {
   createAssociatedTokenAccountInstruction,
   createCloseAccountInstruction,
@@ -42,6 +41,7 @@ import { RaydiumCreatePoolMonitor } from "./createPoolMonitor";
 import { RedisUtil } from "../../utils/redis";
 import { BaseDexClient } from "../baseClient";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
+import { DexPool } from "../../Amm/types";
 
 export class RaydiumClient extends BaseDexClient {
   owner_address: string | undefined;

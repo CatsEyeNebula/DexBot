@@ -5,19 +5,23 @@ import { getPK } from "../mnemonic/pk";
 import { getAddressFromMnemonic } from "../mnemonic/solana";
 import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
+import dotenv from "dotenv";
+import path from "path";
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const run = async () => {
+  const sender = getAddressFromMnemonic(process.env.SOLANA_BOT,1);
+  const privateKey = getPK(sender);
+  const secretKey = bs58.decode(privateKey);  
+  const keypair = Keypair.fromSecretKey(secretKey);
+  console.log("address",keypair.publicKey.toBase58());
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
-  const sender = getAddressFromMnemonic(process.env.SOLANA_BOT,1);
   const raydium = new RaydiumClient({
     owner_address: sender,
   });
-
-  const privateKey = getPK(sender);
-  const secretKey = bs58.decode(privateKey);
-  const keypair = Keypair.fromSecretKey(secretKey);
 
   const snipe_tx = await raydium.snipe({amount_in: 0.01, pool_key: pool_key_info});
   snipe_tx.sign([keypair]);

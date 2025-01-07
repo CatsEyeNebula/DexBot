@@ -546,6 +546,7 @@ export class RaydiumClient extends BaseDexClient {
       pool_info: pool_info,
       pool_keys: pool_key,
     });
+
     return version_tx;
   }
 

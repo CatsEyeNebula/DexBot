@@ -9,12 +9,6 @@ import { setPK } from "./pk";
 
 
 export const getAddressFromMnemonic = (mnemonic: string, index: number): string => {
-    if (!mnemonic) {
-        throw new Error("Invalid mnemonic");
-    }
-    if (mnemonic.split(" ").length !== 24) {
-        throw new Error("Invalid mnemonic length");
-    }
     // 将助记词转换为种子
     const seed = bip39.mnemonicToSeedSync(mnemonic, "");
     // 使用 micro-ed25519-hdkey 从种子生成 HDKey
@@ -29,3 +23,4 @@ export const getAddressFromMnemonic = (mnemonic: string, index: number): string 
     setPK(address, private_key);
     return address;
 }
+

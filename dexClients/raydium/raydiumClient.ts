@@ -41,7 +41,7 @@ import { RaydiumCreatePoolMonitor } from "./createPoolMonitor";
 import { RedisUtil } from "../../utils/redis";
 import { BaseDexClient } from "../baseClient";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
-import { DexPool } from "../../Amm/types";
+import { DexPool } from "../../amm/types";
 
 export class RaydiumClient extends BaseDexClient {
   owner_address: string | undefined;
@@ -53,11 +53,11 @@ export class RaydiumClient extends BaseDexClient {
   constructor(params: ClientParams) {
     super(params);
     this.poolTracker = new SolanaPoolTracker();
-    this.redis = new RedisUtil({
-      host: "localhost",
-      port: "6379",
-      db: 0,
-    });
+    // this.redis = new RedisUtil({
+    //   host: "localhost",
+    //   port: "6379",
+    //   db: 0,
+    // });
   }
 
   async getConnection(): Promise<sol.Connection> {
@@ -533,27 +533,27 @@ export class RaydiumClient extends BaseDexClient {
 
     amount_in = Math.floor(amount_in * Math.pow(10, pool_info.mintA.decimals));
 
-    // swap = await raydium.liquidity.swap({
-    //   poolInfo: pool_info,
-    //   poolKeys: pool,
-    //   amountIn: new BN(amount_in),
-    //   amountOut: new BN(0),
-    //   fixedSide: "in",
-    //   inputMint: pool_info.mintB.address,
-    //   txVersion: TxVersion.V0,
-    //   computeBudgetConfig: computeBudgetConfig,
-    // });
-
-    const version_tx = await this.buildSwapInstruction({
-      token_in: mintIn,
-      token_out: pool_info,
-      amount_in: new BN(amount_in),
-      amount_out: new BN(0),
-      recipient_address: recipient_address,
-      pool_info: pool_info,
-      pool_keys: pool,
+    swap = await raydium.liquidity.swap({
+      poolInfo: pool_info,
+      poolKeys: pool,
+      amountIn: new BN(amount_in),
+      amountOut: new BN(0),
+      fixedSide: "in",
+      inputMint: pool_info.mintB.address,
+      txVersion: TxVersion.V0,
+      computeBudgetConfig: computeBudgetConfig,
     });
-    return version_tx;
+
+    // const version_tx = await this.buildSwapInstruction({
+    //   token_in: mintIn,
+    //   token_out: pool_info,
+    //   amount_in: new BN(amount_in),
+    //   amount_out: new BN(0),
+    //   recipient_address: recipient_address,
+    //   pool_info: pool_info,
+    //   pool_keys: pool,
+    // });
+    return swap.transaction;
   }
 
   async sellAll() {

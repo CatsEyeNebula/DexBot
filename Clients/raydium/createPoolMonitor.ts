@@ -5,18 +5,25 @@ import {
   ParsedTransactionWithMeta,
 } from "@solana/web3.js";
 import { PoolKey, Reserves } from "./types";
+import { RedisUtil } from "../../Utils/redis";
 
 export const RAYDIUM_MIGRATION = "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg";
 export const RAYDIUM_LIQUIDITY = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 
-export class RaydiumCreatePoolTracker {
+export class RaydiumCreatePoolMonitor {
   rpc: string;
   connection: Connection;
+  redis: RedisUtil;
 
   constructor() {
     this.rpc =
       "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e";
     this.connection = new Connection(this.rpc);
+    this.redis = new RedisUtil({
+      host: "localhost",
+      port: "6379",
+      db: 0,
+    });
   }
 
   getAssociatedAuthority(programId: PublicKey, marketId: PublicKey) {
@@ -41,23 +48,50 @@ export class RaydiumCreatePoolTracker {
     return { publicKey: PublicKey.default, nonce };
   }
 
-  async monitor() {
-    this.connection.onLogs(
-      new PublicKey(RAYDIUM_MIGRATION),
-      async ({ logs, err, signature }) => {
-        if (err) {
-          console.log(`[RAYDIUM] [monitor] error: `, err);
-          return;
+  async monitor(): Promise<{ pool_key_info: PoolKey; reverses: Reserves }> {
+    return new Promise((resolve, reject) => {
+      let listenerId: number;
+      listenerId = this.connection.onLogs(
+        new PublicKey(RAYDIUM_MIGRATION),
+        async ({ logs, err, signature }) => {
+          if (err) {
+            console.log(`[RAYDIUM] [monitor] error: `, err);
+            reject(err);
+            return;
+          }
+          console.log(`[RAYDIUM] [monitor] normal signature:`, signature);
+          if (logs && logs.some((log) => log.includes("initialize2"))) {
+            console.log(
+              `[RAYDIUM] [monitor] initialize2 signature:`,
+              signature
+            );
+            const parsed_tx = await this.parsedTargetSignature(signature);
+            if (parsed_tx === null)
+              throw new Error(`[RAYDIUM] [parsedTargetSignature] failed!`);
+            const pool_key_info = this.constructPoolInfo(parsed_tx);
+            const reverses = this.fetchInitialReserves(
+              parsed_tx,
+              pool_key_info
+            );
+
+            const cache_key = `pool_key_info-${pool_key_info["id"]}`;
+            await this.redis.set(cache_key, JSON.stringify(pool_key_info));
+
+            const pair_cache_key = `pool_key_info-${pool_key_info["mintA"]["address"]}-${pool_key_info["mintB"]["address"]}`;
+            await this.redis.set(pair_cache_key, JSON.stringify(pool_key_info));
+
+            const pair_cache_key_reverse = `pool_key_info-${pool_key_info["mintB"]["address"]}-${pool_key_info["mintA"]["address"]}`;
+            await this.redis.set(
+              pair_cache_key_reverse,
+              JSON.stringify(pool_key_info)
+            );
+            
+            this.connection.removeOnLogsListener(listenerId);
+            resolve({ pool_key_info, reverses });
+          }
         }
-        if (logs && logs.some((log) => log.includes("initialize2"))) {
-          const parsed_tx = await this.parsedTargetSignature(signature);
-          if (parsed_tx === null)
-            throw new Error(`[RAYDIUM] [parsedTargetSignature] failed!`);
-          const pool_key_info = this.constructPoolInfo(parsed_tx);
-          const reverses = this.fetchInitialReserves(parsed_tx, pool_key_info);
-        }
-      }
-    );
+      );
+    });
   }
 
   async parsedTargetSignature(
@@ -144,4 +178,13 @@ export class RaydiumCreatePoolTracker {
     }
     return reserves;
   }
+}
+
+const testMonitor = async () => {
+  const monitor = new RaydiumCreatePoolMonitor();
+  await monitor.monitor();
+};
+
+if (require.main === module) {
+  testMonitor();
 }

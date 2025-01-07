@@ -22,15 +22,17 @@ import { SolanaPoolTracker } from "./solanaPoolTracker";
 import { SONALA_RPC } from "../../constants";
 import {
   BuildSwapInstructionParams,
+  ClientParams,
   GetPriceParams,
   PairSymbol,
   PoolAddress,
+  Reserves,
   SIDE,
   SwapParams,
 } from "./types";
-import { calcAMMAmount } from "../../DEX/amm";
+import { calcAMMAmount } from "../../Amm/amm";
 import { RedisUtil } from "../../Utils/redis";
-import { DexPool } from "../../DEX/types";
+import { DexPool } from "../../Amm/types";
 import {
   createAssociatedTokenAccountInstruction,
   createCloseAccountInstruction,
@@ -39,17 +41,17 @@ import {
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { RaydiumCreatePoolMonitor } from "./createPoolMonitor";
 
 export class RaydiumClient extends BaseDexClient {
-  address: string | undefined;
+  owner_address: string | undefined;
   redis: RedisUtil;
   poolTracker: SolanaPoolTracker;
   native_token = "So11111111111111111111111111111111111111112";
   DEFAULT_FEE: number = 0.0025;
 
-  constructor(address?: string) {
-    super();
-    this.address = address;
+  constructor(params: ClientParams) {
+    super(params);
     this.poolTracker = new SolanaPoolTracker();
     this.redis = new RedisUtil({
       host: "localhost",
@@ -67,21 +69,16 @@ export class RaydiumClient extends BaseDexClient {
     const connection = await this.getConnection();
 
     let raydium: Raydium;
-    if (this.address) {
+    if (this.owner_address) {
       raydium = await Raydium.load({
         connection: connection,
-        owner: new PublicKey(this.address),
+        owner: new PublicKey(this.owner_address),
         disableFeatureCheck: true,
         disableLoadToken: true,
         blockhashCommitment: "confirmed",
       });
     } else {
-      raydium = await Raydium.load({
-        connection: connection,
-        disableFeatureCheck: true,
-        disableLoadToken: true,
-        blockhashCommitment: "confirmed",
-      });
+      throw new Error(`[RAYDIUM] [getRaydiumsdk] need owner_address!`);
     }
     return raydium;
   }
@@ -165,7 +162,7 @@ export class RaydiumClient extends BaseDexClient {
     }
 
     // get Reserves
-    let reserves: { [token_address: string]: number; timestamp?: number } = {};
+    let reserves: Reserves = {};
     const reserves_cache_key = `reserves-${pool_key_info["mintA"].address}-${pool_key_info["mintB"].address}`;
     const reserves_str = await this.redis.get(reserves_cache_key);
     if (reserves_str) {
@@ -280,7 +277,7 @@ export class RaydiumClient extends BaseDexClient {
   }
 
   async buildSwapInstruction(
-    params: BuildSwapInstructionParams
+    params: BuildSwapInstructionParams,
   ): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     const connection = await this.getConnection();
@@ -288,11 +285,11 @@ export class RaydiumClient extends BaseDexClient {
     const {
       token_in,
       token_out,
-      recipient_address,
       amount_in,
       amount_out,
       pool_keys,
       pool_info,
+      recipient_address,
     } = params;
 
     const modifyComputeUnits = sol.ComputeBudgetProgram.setComputeUnitLimit({
@@ -316,26 +313,26 @@ export class RaydiumClient extends BaseDexClient {
     const token_in_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_in),
       owner,
-      true
+      true,
     );
     const token_out_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_out),
-      owner,
-      true
+      new sol.PublicKey(recipient_address),
+      true,
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_in_ata,
         owner,
-        new sol.PublicKey(token_in)
-      )
+        new sol.PublicKey(token_in),
+      ),
     );
     // const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
     //   splAccountLayout.span,
     //   "confirmed",
     // );
-    const balanceNeeded = 3039280;
+    const balanceNeeded = 3123456;
     console.log(`balanceNeeded: ${balanceNeeded}`);
     const lamports = parseBigNumberish(amount_in).add(new BN(balanceNeeded));
     console.log(`getMinimumBalanceForRentExemption lamports: ${lamports}`);
@@ -352,30 +349,30 @@ export class RaydiumClient extends BaseDexClient {
         lamports: lamports.toNumber(),
         space: splAccountLayout.span,
         programId: TOKEN_PROGRAM_ID,
-      })
+      }),
     );
     instructions.push(
       createInitializeAccountInstruction(
         newAccount.publicKey,
         new sol.PublicKey(this.native_token),
-        owner
-      )
+        owner,
+      ),
     );
     instructions.push(
       createTransferInstruction(
         newAccount.publicKey,
         token_in_ata,
         owner,
-        BigInt(String(amount_in))
-      )
+        BigInt(String(amount_in)),
+      ),
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_out_ata,
-        owner,
-        new sol.PublicKey(token_out)
-      )
+        new sol.PublicKey(recipient_address),
+        new sol.PublicKey(token_out),
+      ),
     );
     instructions.push(
       makeAMMSwapInstruction({
@@ -388,8 +385,8 @@ export class RaydiumClient extends BaseDexClient {
         },
         amountIn: amount_in,
         amountOut: amount_out,
-        fixedSide: "in",
-      })
+        fixedSide: "out",
+      }),
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -397,8 +394,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID
-      )
+        TOKEN_PROGRAM_ID,
+      ),
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -406,14 +403,14 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID
-      )
+        TOKEN_PROGRAM_ID,
+      ),
     );
     instructions.forEach((instruction) => {
       initialTx.add(instruction);
     });
     const messageV0 = new sol.TransactionMessage({
-      payerKey: owner,
+      payerKey: new sol.PublicKey(this.owner_address),
       recentBlockhash: latestBlockhash.blockhash,
       instructions: initialTx.instructions,
     }).compileToV0Message();
@@ -422,7 +419,7 @@ export class RaydiumClient extends BaseDexClient {
   }
 
   async swap(params: SwapParams): Promise<sol.VersionedTransaction> {
-    if (!this.address) {
+    if (!this.owner_address) {
       throw new Error(`[RAYDIUM] [swap] require address!`);
     }
     const raydium = await this.getRaydiumsdk();
@@ -516,7 +513,6 @@ export class RaydiumClient extends BaseDexClient {
     return version_tx;
   }
 
-  // 没有给jito小费
   async snipe(amount_in: number): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     let swap: TxV0BuildData;

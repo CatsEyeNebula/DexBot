@@ -1,4 +1,3 @@
-import { BaseDexClient } from "../baseClient";
 import BN from "bn.js";
 import sol, {
   PublicKey,
@@ -18,19 +17,10 @@ import {
   splAccountLayout,
   makeAMMSwapInstruction,
 } from "@raydium-io/raydium-sdk-v2";
-import { SolanaPoolTracker } from "./solanaPoolTracker";
 import { SONALA_RPC } from "../../constants";
-import {
-  BuildSwapInstructionParams,
-  GetPriceParams,
-  PairSymbol,
-  PoolAddress,
-  SIDE,
-  SwapParams,
-} from "./types";
-import { calcAMMAmount } from "../../DEX/amm";
-import { RedisUtil } from "../../Utils/redis";
-import { DexPool } from "../../DEX/types";
+
+import { calcAMMAmount } from "../../dex/amm";
+import { RedisUtil } from "../../utils/redis";
 import {
   createAssociatedTokenAccountInstruction,
   createCloseAccountInstruction,
@@ -39,6 +29,10 @@ import {
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { SolanaPoolTracker } from "./solanaPoolTracker";
+import { DexPool } from "../../DEX/types";
+import { BaseDexClient } from "../baseClient";
+import { PairSymbol, PoolAddress, GetPriceParams, SIDE, BuildSwapInstructionParams, SwapParams } from "./types";
 
 export class RaydiumClient extends BaseDexClient {
   address: string | undefined;

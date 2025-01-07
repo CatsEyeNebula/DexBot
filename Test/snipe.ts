@@ -1,6 +1,6 @@
-import { RaydiumCreatePoolMonitor } from "../Clients/raydium/createPoolMonitor";
-import { RaydiumClient } from "../Clients/raydium/raydiumClient";
-import { SIDE } from "../Clients/raydium/types";
+import { RaydiumCreatePoolMonitor } from "../dexClients/raydium/createPoolMonitor";
+import { RaydiumClient } from "../dexClients/raydium/raydiumClient";
+import { SIDE } from "../dexClients/raydium/types";
 
 const snipeTx = async () => {
   const monitor = new RaydiumCreatePoolMonitor();

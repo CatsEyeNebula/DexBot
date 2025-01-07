@@ -1,6 +1,10 @@
 import { BaseDexClient } from "../baseClient";
 import BN from "bn.js";
-import sol, { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import sol, {
+  PublicKey,
+  SystemProgram,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import {
   Raydium,
   TxVersion,
@@ -16,11 +20,25 @@ import {
 } from "@raydium-io/raydium-sdk-v2";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
 import { SONALA_RPC } from "../../constants";
-import { BuildSwapInstructionParams, GetPriceParams, PairSymbol, PoolAddress, SIDE } from "./types";
+import {
+  BuildSwapInstructionParams,
+  GetPriceParams,
+  PairSymbol,
+  PoolAddress,
+  SIDE,
+  SwapParams,
+} from "./types";
 import { calcAMMAmount } from "../../DEX/amm";
 import { RedisUtil } from "../../Utils/redis";
 import { DexPool } from "../../DEX/types";
-import { createAssociatedTokenAccountInstruction, createCloseAccountInstruction, createInitializeAccountInstruction, createTransferInstruction, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  createAssociatedTokenAccountInstruction,
+  createCloseAccountInstruction,
+  createInitializeAccountInstruction,
+  createTransferInstruction,
+  getAssociatedTokenAddress,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 export class RaydiumClient extends BaseDexClient {
   address: string | undefined;
@@ -262,7 +280,7 @@ export class RaydiumClient extends BaseDexClient {
   }
 
   async buildSwapInstruction(
-    params: BuildSwapInstructionParams,
+    params: BuildSwapInstructionParams
   ): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     const connection = await this.getConnection();
@@ -270,7 +288,7 @@ export class RaydiumClient extends BaseDexClient {
     const {
       token_in,
       token_out,
-      token_address,
+      recipient_address,
       amount_in,
       amount_out,
       pool_keys,
@@ -298,20 +316,20 @@ export class RaydiumClient extends BaseDexClient {
     const token_in_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_in),
       owner,
-      true,
+      true
     );
     const token_out_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_out),
       owner,
-      true,
+      true
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_in_ata,
         owner,
-        new sol.PublicKey(token_in),
-      ),
+        new sol.PublicKey(token_in)
+      )
     );
     // const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
     //   splAccountLayout.span,
@@ -320,7 +338,7 @@ export class RaydiumClient extends BaseDexClient {
     const balanceNeeded = 3039280;
     console.log(`balanceNeeded: ${balanceNeeded}`);
     const lamports = parseBigNumberish(amount_in).add(new BN(balanceNeeded));
-    console.log(`getMinimumBalanceForRentExemption lamports: ${lamports}`)
+    console.log(`getMinimumBalanceForRentExemption lamports: ${lamports}`);
     const newAccount = generatePubKey({
       fromPublicKey: owner,
       programId: TOKEN_PROGRAM_ID,
@@ -334,30 +352,30 @@ export class RaydiumClient extends BaseDexClient {
         lamports: lamports.toNumber(),
         space: splAccountLayout.span,
         programId: TOKEN_PROGRAM_ID,
-      }),
+      })
     );
     instructions.push(
       createInitializeAccountInstruction(
         newAccount.publicKey,
         new sol.PublicKey(this.native_token),
-        owner,
-      ),
+        owner
+      )
     );
     instructions.push(
       createTransferInstruction(
         newAccount.publicKey,
         token_in_ata,
         owner,
-        BigInt(String(amount_in)),
-      ),
+        BigInt(String(amount_in))
+      )
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_out_ata,
         owner,
-        new sol.PublicKey(token_out),
-      ),
+        new sol.PublicKey(token_out)
+      )
     );
     instructions.push(
       makeAMMSwapInstruction({
@@ -371,7 +389,7 @@ export class RaydiumClient extends BaseDexClient {
         amountIn: amount_in,
         amountOut: amount_out,
         fixedSide: "in",
-      }),
+      })
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -379,8 +397,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID,
-      ),
+        TOKEN_PROGRAM_ID
+      )
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -388,8 +406,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID,
-      ),
+        TOKEN_PROGRAM_ID
+      )
     );
     instructions.forEach((instruction) => {
       initialTx.add(instruction);
@@ -401,6 +419,101 @@ export class RaydiumClient extends BaseDexClient {
     }).compileToV0Message();
     const versionedTransaction = new sol.VersionedTransaction(messageV0);
     return versionedTransaction;
+  }
+
+  async swap(params: SwapParams): Promise<sol.VersionedTransaction> {
+    if (!this.address) {
+      throw new Error(`[RAYDIUM] [swap] require address!`);
+    }
+    const raydium = await this.getRaydiumsdk();
+    const owner = raydium.account.scope.ownerPubKey;
+    let { token_a, token_b } = params;
+
+    const pair: PairSymbol = {
+      token_a: token_a,
+      token_b: token_b,
+    };
+    const poolAddress = await this.getPoolAddress(pair);
+    const pool = await this.getPool(poolAddress.address);
+
+    let token_a_amount: number;
+    let token_b_amount: number;
+    let side = params.side;
+    let price = params.price || (await this.getPrice(params));
+    const slippage = params.slippage || 0.01;
+
+    if (!params.amount) {
+      throw new Error(`Amount is required!`);
+    }
+
+    if (params.is_token_b_amount) {
+      token_b_amount = params.amount;
+      token_a_amount = 0;
+    } else {
+      token_a_amount = params.amount;
+      token_b_amount = 0;
+    }
+
+    if (token_a !== pool.token_a) {
+      [token_a, token_b] = [token_b, token_a];
+      [token_a_amount, token_b_amount] = [token_b_amount, token_a_amount];
+      side = side === SIDE.BUY ? SIDE.SELL : SIDE.BUY;
+      price = 1 / price;
+    }
+
+    // pool_key_info
+    const cache_key = `pool_key_info-${poolAddress.address}`;
+    const pool_key_info_str = await this.redis.get(cache_key);
+    const pool_key_info = JSON.parse(pool_key_info_str);
+
+    // pool_info
+    let pool_info = {} as ApiV3PoolInfoStandardItem;
+    pool_info.id = pool_key_info.id;
+    pool_info.programId = pool_key_info.programId;
+    pool_info.mintA = pool_key_info.mintA;
+    pool_info.mintB = pool_key_info.mintB;
+    pool_info.pooltype = [];
+
+    const recipient_address = params.recipient_address
+      ? params.recipient_address
+      : owner.toBase58();
+
+    const mintIn =
+      side === SIDE.BUY ? pool_info.mintB.address : pool_info.mintA.address;
+    const mintOut =
+      side === SIDE.BUY ? pool_info.mintA.address : pool_info.mintB.address;
+    const decimals_in =
+      side === SIDE.BUY ? pool_info.mintB.decimals : pool_info.mintA.decimals;
+    const decimals_out =
+      side === SIDE.BUY ? pool_info.mintA.decimals : pool_info.mintB.decimals;
+    let amount_in = side === SIDE.BUY ? token_b_amount : token_a_amount;
+    let amount_out = side === SIDE.BUY ? token_a_amount : token_b_amount;
+
+    if (side === SIDE.SELL) {
+      price = 1 / price;
+    }
+
+    if (amount_in) {
+      amount_out = (amount_in / price) * (1 - slippage);
+    } else {
+      amount_in = amount_out * price * (1 + slippage);
+    }
+
+    console.log(`amount_out: ${amount_out}, amount_in: ${amount_in}`);
+
+    amount_in = Math.floor(amount_in * Math.pow(10, decimals_in));
+    amount_out = Math.floor(amount_out * Math.pow(10, decimals_out));
+
+    const version_tx = await this.buildSwapInstruction({
+      token_in: mintIn,
+      token_out: mintOut,
+      amount_in: new BN(amount_in),
+      amount_out: new BN(amount_out),
+      recipient_address: recipient_address,
+      pool_info: pool_info,
+      pool_keys: pool_key_info,
+    });
+    return version_tx;
   }
 
   // 没有给jito小费

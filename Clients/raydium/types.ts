@@ -75,8 +75,8 @@ export interface PoolAddress extends PairSymbol {
 export interface PoolInfo {
   id: string;
   programId: string;
-  mintA: {address: string; decimals: number};
-  mintB: {address: string; decimals: number};
+  mintA: { address: string; decimals: number };
+  mintB: { address: string; decimals: number };
   pooltype: string[];
 }
 
@@ -85,7 +85,32 @@ export interface BuildSwapInstructionParams {
   token_out: string;
   amount_in: BN;
   amount_out: BN;
-  token_address: string;
+  recipient_address: string;
   pool_keys: PoolKey;
   pool_info: PoolInfo;
+}
+
+export enum SWAP_ROUTER {
+  DEFAULT = "default",
+  UNIVERSAL_ROUTER = "universal_router",
+  CUSTOM_ROUTER = "custom_router",
+}
+
+export interface SwapParams extends PairSymbol {
+  side: SIDE;
+  amount: number;
+  is_token_b_amount?: boolean; // default is false
+  price?: number;
+  recipient_address?: string;
+  slippage?: number;
+  order_duration?: number;
+  router?: SWAP_ROUTER;
+  permit2_nonce?: string;
+  paths?: RoutePath[];
+  pool_address?: PoolAddress;
+  extra_params?: {
+    nonce?: number;
+    support_fee?: boolean;
+    price_check?: boolean;
+  };
 }

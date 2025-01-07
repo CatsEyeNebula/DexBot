@@ -23,8 +23,6 @@ const run = async () => {
     owner_address: sender,
   });
 
-  
-
   const params = {
     token_a: pool_key_info.mintB.address,
     token_b: "So11111111111111111111111111111111111111112",

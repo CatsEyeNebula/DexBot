@@ -337,6 +337,7 @@ export class RaydiumClient extends BaseDexClient {
     //   "confirmed",
     // );
     const balanceNeeded = 3123456;
+                          
     console.log(`balanceNeeded: ${balanceNeeded}`);
     const lamports = parseBigNumberish(amount_in).add(new BN(balanceNeeded));
     console.log(`getMinimumBalanceForRentExemption lamports: ${lamports}`);

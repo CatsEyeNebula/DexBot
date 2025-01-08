@@ -22,15 +22,22 @@ const run = async () => {
   const raydium = new RaydiumClient({
     owner_address: sender,
   });
+  const conection = await raydium.getConnection();
 
   const snipe_tx = await raydium.snipe({amount_in: 0.01, pool_key: pool_key_info});
   snipe_tx.sign([keypair]);
 
   const rawTransaction = snipe_tx.serialize();
-  const conection = await raydium.getConnection();
   const hash = conection.sendRawTransaction(rawTransaction);
   console.log("snipe done ",hash);
   
+  const sellAll_tx = await raydium.sellAll(pool_key_info);
+  sellAll_tx.sign([keypair]);
+
+  const sellRawTransaction = snipe_tx.serialize();
+  const sellHash = conection.sendRawTransaction(sellRawTransaction);
+  console.log("sell done ",sellHash);
+
 };
 
 if (require.main === module) {

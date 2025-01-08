@@ -3,7 +3,7 @@ import { ClientParams } from "./raydium/types";
 import { PoolKey } from "./raydium/types";
 import sol from "@solana/web3.js";
 
-export class BaseDexClient {
+ export abstract class BaseDexClient {
   chain_id: CHAIN_ID;
   owner_address?: string;
   private_key?: string;
@@ -18,12 +18,10 @@ export class BaseDexClient {
     }
   }
 
-  async snipe({
-    amount_in: number,
-    pool_key: PoolKey,
-  }): Promise<sol.VersionedTransaction> {
-    throw new Error("Method not implemented.");
-  }
+  abstract snipe({
+    amount_in,
+    pool_key,
+  }): Promise<sol.VersionedTransaction>;
 
-  async sellAll() {}
+  abstract sellAll(sellToken) : Promise<sol.VersionedTransaction>;
 }

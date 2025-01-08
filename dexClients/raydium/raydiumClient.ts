@@ -523,8 +523,14 @@ export class RaydiumClient extends BaseDexClient {
   }): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     const { amount_in, pool_key } = params;
+    let pool_info: PoolInfo = {
+      id: "",
+      programId: "",
+      mintA: null,
+      mintB: null,
+      pooltype: []
+  };
 
-    let pool_info: PoolInfo;
     pool_info.id = pool_key.id;
     pool_info.programId = pool_key.programId;
     pool_info.mintA = pool_key.mintA;
@@ -555,13 +561,19 @@ export class RaydiumClient extends BaseDexClient {
   async sellAll(pool_key:PoolKey) {
     const raydium = await this.getRaydiumsdk();
     const tokenBalance = await this.getTokenBalance(this.owner_address);
-    let pool_info: PoolInfo;
-    pool_info.id = pool_key.id;
+    let pool_info: PoolInfo = {
+      id: "",
+      programId: "",
+      mintA: null,
+      mintB: null,
+      pooltype: []
+  };
+      pool_info.id = pool_key.id;
     pool_info.programId = pool_key.programId;
     pool_info.mintA = pool_key.mintA;
     pool_info.mintB = pool_key.mintB;
     pool_info.pooltype = [];
-    
+
     const token_in = pool_info.mintB.address;
     const token_out = pool_info.mintA.address;
     const owner = raydium.account.scope.ownerPubKey;

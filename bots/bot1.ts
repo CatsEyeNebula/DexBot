@@ -11,31 +11,31 @@ import path from "path";
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const run = async () => {
+  
   const sender = getAddressFromMnemonic(process.env.SOLANA_BOT,1);
   const privateKey = getPK(sender);
   const secretKey = bs58.decode(privateKey);  
   const keypair = Keypair.fromSecretKey(secretKey);
   console.log("address",keypair.publicKey.toBase58());
-  const monitor = new RaydiumCreatePoolMonitor();
-  const { pool_key_info, reverses } = await monitor.monitor();
-  console.log(pool_key_info, reverses);
   const raydium = new RaydiumClient({
     owner_address: sender,
   });
   const conection = await raydium.getConnection();
-
-  const snipe_tx = await raydium.snipe({amount_in: 0.01, pool_key: pool_key_info});
+  const monitor = new RaydiumCreatePoolMonitor();
+  const { pool_key_info, reverses } = await monitor.monitor();
+  console.log(pool_key_info, reverses);
+  const snipe_tx = await raydium.snipe({amount_in: 0.001, pool_key: pool_key_info});
   snipe_tx.sign([keypair]);
 
   const rawTransaction = snipe_tx.serialize();
-  const hash = conection.sendRawTransaction(rawTransaction);
+  const hash = await conection.sendRawTransaction(rawTransaction);
   console.log("snipe done ",hash);
   
   const sellAll_tx = await raydium.sellAll(pool_key_info);
   sellAll_tx.sign([keypair]);
 
   const sellRawTransaction = snipe_tx.serialize();
-  const sellHash = conection.sendRawTransaction(sellRawTransaction);
+  const sellHash = await conection.sendRawTransaction(sellRawTransaction);
   console.log("sell done ",sellHash);
 
 };

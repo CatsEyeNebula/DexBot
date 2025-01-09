@@ -12,6 +12,7 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const run = async () => {
   const sender = getAddressFromMnemonic(process.env.SOLANA_BOT, 1);
+  console.log(sender)
   const privateKey = getPK(sender);
   const secretKey = bs58.decode(privateKey);
   const keypair = Keypair.fromSecretKey(secretKey);
@@ -24,8 +25,8 @@ const run = async () => {
   });
 
   const params = {
-    // token_a: pool_key_info.mintB.address,
-    token_a: "5f5o26isDtLmaHuMjpp1TKCLv9YJZLtFci6xbaJUpump",
+    token_a: pool_key_info.mintB.address,
+    // token_a: "5f5o26isDtLmaHuMjpp1TKCLv9YJZLtFci6xbaJUpump",
     token_b: "So11111111111111111111111111111111111111112",
     side: SIDE.BUY,
     amount: 0.001,
@@ -36,7 +37,7 @@ const run = async () => {
   // const snipe_tx = await raydium.snipe({amount_in: 0.001, pool_key: pool_key_info});
 
 
-  // snipe_tx.sign([keypair]);
+  snipe_tx.sign([keypair]);
 
   const rawTransaction = snipe_tx.serialize();
   const conection = await raydium.getConnection();

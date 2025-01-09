@@ -37,6 +37,7 @@ import {
   createInitializeAccountInstruction,
   createTransferInstruction,
   getAssociatedTokenAddress,
+  NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { RaydiumCreatePoolMonitor } from "./createPoolMonitor";
@@ -44,8 +45,7 @@ import { RedisUtil } from "../../utils/redis";
 import { BaseDexClient } from "../baseClient";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
 import { DexPool } from "../../amm/types";
-
-const MIN_BALANCE_FOR_RENT = 3039280;
+import { toFixed } from "../../utils/format";
 
 export class RaydiumClient extends BaseDexClient {
   owner_address: string | undefined;
@@ -332,7 +332,12 @@ export class RaydiumClient extends BaseDexClient {
         new sol.PublicKey(token_in),
       ),
     );
-    const balanceNeeded = MIN_BALANCE_FOR_RENT;
+    // const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+    //   splAccountLayout.span,
+    //   "confirmed",
+    // );
+    const balanceNeeded = 3123456;
+    console.log(`balanceNeeded: ${balanceNeeded}`);
     const lamports = parseBigNumberish(amount_in).add(new BN(balanceNeeded));
     const newAccount = generatePubKey({
       fromPublicKey: owner,
@@ -615,7 +620,7 @@ export class RaydiumClient extends BaseDexClient {
     const raydium = await this.getRaydiumsdk();
     const { amount_in, pool_key } = params;
 
-    let pool_info = {} as PoolInfo;
+    let pool_info: PoolInfo;
     pool_info.id = pool_key.id;
     pool_info.programId = pool_key.programId;
     pool_info.mintA = pool_key.mintA;
@@ -643,34 +648,76 @@ export class RaydiumClient extends BaseDexClient {
     return version_tx;
   }
 
-  async sellAll() {
+  async sellAll(pool_key:PoolKey) {
     const raydium = await this.getRaydiumsdk();
-    let swap: TxV0BuildData;
-
-    let pool_info: ApiV3PoolInfoStandardItem = {} as ApiV3PoolInfoStandardItem;
-    const pool = await this.poolTracker.waitingToGetPool();
-
-    pool_info.id = pool.id;
-    pool_info.programId = pool.programId;
-    pool_info.mintA = pool.mintA; //wsol
-    pool_info.mintB = pool.mintB;
+    const tokenBalance = await this.getTokenBalance(this.owner_address);
+    let pool_info: PoolInfo = {
+      id: "",
+      programId: "",
+      mintA: null,
+      mintB: null,
+      pooltype: []
+  };
+      pool_info.id = pool_key.id;
+    pool_info.programId = pool_key.programId;
+    pool_info.mintA = pool_key.mintA;
+    pool_info.mintB = pool_key.mintB;
     pool_info.pooltype = [];
 
-    const computeBudgetConfig = {
-      units: 5000000,
-      microLamports: 1000000,
-    };
+    const token_in = pool_info.mintB.address;
+    const token_out = pool_info.mintA.address;
+    const owner = raydium.account.scope.ownerPubKey;
 
-    swap = await raydium.liquidity.swap({
-      poolInfo: pool_info,
-      poolKeys: pool,
-      amountIn: new BN(0),
-      amountOut: new BN(0),
-      fixedSide: "out",
-      inputMint: pool_info.mintA.address,
-      txVersion: TxVersion.V0,
-      computeBudgetConfig: computeBudgetConfig,
+    const version_tx = await this.buildSwapInstruction({
+      token_in: token_in,
+      token_out: token_out,
+      amount_in: new BN(tokenBalance),
+      amount_out: new BN(0),
+      recipient_address: owner.toBase58(),
+      pool_info: pool_info,
+      pool_keys: pool_key,
     });
-    return;
+
+    return version_tx;
+  }
+
+  async getBalance(address?: string): Promise<number> {
+    address = address || this.owner_address;
+    const connection = await this.getConnection();
+    const balance_raw = await connection.getBalance(new sol.PublicKey(address));
+    const balance = balance_raw / 10 ** 9;
+    return balance;
+  }
+  
+  async getTokenBalance(
+    token_address: string,
+    address?: string,
+  ): Promise<number> {
+    address = address || this.owner_address;
+    const connection = await this.getConnection();
+    if (this.isNative(token_address)) return await this.getBalance(address);
+
+    const owner_pubkey = new sol.PublicKey(address);
+    const token_mint_pubkey = new sol.PublicKey(token_address);
+    const accounts = await connection.getTokenAccountsByOwner(owner_pubkey, {
+      mint: token_mint_pubkey,
+    });
+    let total_balance = 0;
+    for (const account of accounts.value) {
+      const balance_raw = await connection.getTokenAccountBalance(
+        account.pubkey,
+      );
+      const balance = balance_raw.value.uiAmount || 0;
+      total_balance += balance;
+    }
+    return +toFixed(total_balance, 9);
+  }
+
+  isNative(address: string) {
+    if ( address === NATIVE_MINT.toBase58()) {
+      return true;
+    }else {
+      return false;
+    }
   }
 }

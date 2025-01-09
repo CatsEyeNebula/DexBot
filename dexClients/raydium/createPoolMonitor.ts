@@ -74,17 +74,17 @@ export class RaydiumCreatePoolMonitor {
               pool_key_info
             );
 
-            const cache_key = `pool_key_info-${pool_key_info["id"]}`;
-            await this.redis.set(cache_key, JSON.stringify(pool_key_info));
+            // const cache_key = `pool_key_info-${pool_key_info["id"]}`;
+            // await this.redis.set(cache_key, JSON.stringify(pool_key_info));
 
-            const pair_cache_key = `pool_key_info-${pool_key_info["mintA"]["address"]}-${pool_key_info["mintB"]["address"]}`;
-            await this.redis.set(pair_cache_key, JSON.stringify(pool_key_info));
+            // const pair_cache_key = `pool_key_info-${pool_key_info["mintA"]["address"]}-${pool_key_info["mintB"]["address"]}`;
+            // await this.redis.set(pair_cache_key, JSON.stringify(pool_key_info));
 
-            const pair_cache_key_reverse = `pool_key_info-${pool_key_info["mintB"]["address"]}-${pool_key_info["mintA"]["address"]}`;
-            await this.redis.set(
-              pair_cache_key_reverse,
-              JSON.stringify(pool_key_info)
-            );
+            // const pair_cache_key_reverse = `pool_key_info-${pool_key_info["mintB"]["address"]}-${pool_key_info["mintA"]["address"]}`;
+            // await this.redis.set(
+            //   pair_cache_key_reverse,
+            //   JSON.stringify(pool_key_info)
+            // );
             
             this.connection.removeOnLogsListener(listenerId);
             resolve({ pool_key_info, reverses });

@@ -3,19 +3,19 @@ import { RaydiumClient } from "../dexClients/raydium/raydiumClient";
 import { SIDE } from "../dexClients/raydium/types";
 import { getPK } from "../mnemonic/pk";
 import { getAddressFromMnemonic } from "../mnemonic/solana";
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
 import dotenv from "dotenv";
 import path from "path";
 
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const run = async () => {
-  const sender = getAddressFromMnemonic(process.env.SOLANA_BOT,1);
+  const sender = getAddressFromMnemonic(process.env.SOLANA_BOT, 1);
   const privateKey = getPK(sender);
-  const secretKey = bs58.decode(privateKey);  
+  const secretKey = bs58.decode(privateKey);
   const keypair = Keypair.fromSecretKey(secretKey);
-  console.log("address",keypair.publicKey.toBase58());
+  console.log("address", keypair.publicKey.toBase58());
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
@@ -23,16 +23,31 @@ const run = async () => {
     owner_address: sender,
   });
 
-  const snipe_tx = await raydium.snipe({amount_in: 0.01, pool_key: pool_key_info});
-  snipe_tx.sign([keypair]);
+  const params = {
+    // token_a: pool_key_info.mintB.address,
+    token_a: "5f5o26isDtLmaHuMjpp1TKCLv9YJZLtFci6xbaJUpump",
+    token_b: "So11111111111111111111111111111111111111112",
+    side: SIDE.BUY,
+    amount: 0.001,
+    is_token_b_amount: true,
+    slippage: 0.5,
+  };
+  const snipe_tx = await raydium.swap(params);
+  // const snipe_tx = await raydium.snipe({amount_in: 0.001, pool_key: pool_key_info});
+
+
+  // snipe_tx.sign([keypair]);
 
   const rawTransaction = snipe_tx.serialize();
   const conection = await raydium.getConnection();
-  const hash = conection.sendRawTransaction(rawTransaction);
-  console.log("snipe done ",hash);
-  
+  const hash = await conection.sendRawTransaction(rawTransaction, {
+    maxRetries: 3,
+    skipPreflight: true,
+    preflightCommitment: "confirmed",
+  });
+  console.log("snipe done ", hash);
 };
 
 if (require.main === module) {
-    run();
+  run();
 }

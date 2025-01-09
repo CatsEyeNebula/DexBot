@@ -19,11 +19,11 @@ export class RaydiumCreatePoolMonitor {
     this.rpc =
       "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e";
     this.connection = new Connection(this.rpc);
-    // this.redis = new RedisUtil({
-    //   host: "localhost",
-    //   port: "6379",
-    //   db: 0,
-    // });
+    this.redis = new RedisUtil({
+      host: "localhost",
+      port: "6379",
+      db: 0,
+    });
   }
 
   getAssociatedAuthority(programId: PublicKey, marketId: PublicKey) {

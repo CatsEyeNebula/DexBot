@@ -13,6 +13,7 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 const run = async () => {
   
   const sender = getAddressFromMnemonic(process.env.SOLANA_BOT, 1);
+  console.log(sender);
   const privateKey = getPK(sender);
   console.log("privateKey",privateKey);
   const raydium = new RaydiumClient({
@@ -23,22 +24,26 @@ const run = async () => {
 
 
   console.log("address", keypair.publicKey.toBase58());
+
+
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
-  
 
-  const params = {
-    token_a: pool_key_info.mintB.address,
-    token_b: "So11111111111111111111111111111111111111112",
-    side: SIDE.BUY,
-    amount: 0.001,
-    is_token_b_amount: true,
-    slippage: 0.5,
-  };
-  const snipe_tx = await raydium.swap(params);
-  // const snipe_tx = await raydium.snipe({amount_in: 0.001, pool_key: pool_key_info});
-
+  // const params = {
+  //   token_a: pool_key_info.mintB.address,
+  //   // token_a: "5f5o26isDtLmaHuMjpp1TKCLv9YJZLtFci6xbaJUpump",
+  //   token_b: "So11111111111111111111111111111111111111112",
+  //   side: SIDE.BUY,
+  //   amount: 0.001,
+  //   is_token_b_amount: true,
+  //   slippage: 0.5,
+  // };
+  // const snipe_tx = await raydium.swap(params);
+  const snipe_tx = await raydium.snipe({
+    amount_in: 0.001,
+    pool_key: pool_key_info,
+  });
 
   snipe_tx.sign([keypair]);
 
@@ -50,6 +55,16 @@ const run = async () => {
     preflightCommitment: "confirmed",
   });
   console.log("snipe done ", hash);
+
+  const sell_tx = await raydium.sellAll(pool_key_info);
+  snipe_tx.sign([keypair]);
+  const sell_rawTransaction = sell_tx.serialize();
+  const sell_hash = await conection.sendRawTransaction(sell_rawTransaction, {
+    maxRetries: 3,
+    skipPreflight: true,
+    preflightCommitment: "confirmed",
+  });
+  console.log("snipe done ", sell_hash);
 };
 
 if (require.main === module) {

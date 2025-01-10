@@ -46,6 +46,7 @@ import { BaseDexClient } from "../baseClient";
 import { SolanaPoolTracker } from "./solanaPoolTracker";
 import { DexPool } from "../../amm/types";
 import { toFixed } from "../../utils/format";
+import axios from "axios";
 
 export class RaydiumClient extends BaseDexClient {
   owner_address: string | undefined;
@@ -281,7 +282,7 @@ export class RaydiumClient extends BaseDexClient {
   }
 
   async buildSwapInstruction(
-    params: BuildSwapInstructionParams,
+    params: BuildSwapInstructionParams
   ): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     const connection = await this.getConnection();
@@ -317,20 +318,20 @@ export class RaydiumClient extends BaseDexClient {
     const token_in_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_in),
       owner,
-      true,
+      true
     );
     const token_out_ata = await getAssociatedTokenAddress(
       new sol.PublicKey(token_out),
       new sol.PublicKey(recipient_address),
-      true,
+      true
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_in_ata,
         owner,
-        new sol.PublicKey(token_in),
-      ),
+        new sol.PublicKey(token_in)
+      )
     );
     // const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
     //   splAccountLayout.span,
@@ -352,30 +353,30 @@ export class RaydiumClient extends BaseDexClient {
         lamports: lamports.toNumber(),
         space: splAccountLayout.span,
         programId: TOKEN_PROGRAM_ID,
-      }),
+      })
     );
     instructions.push(
       createInitializeAccountInstruction(
         newAccount.publicKey,
         new sol.PublicKey(token_in),
-        owner,
-      ),
+        owner
+      )
     );
     instructions.push(
       createTransferInstruction(
         newAccount.publicKey,
         token_in_ata,
         owner,
-        BigInt(String(amount_in)),
-      ),
+        BigInt(String(amount_in))
+      )
     );
     instructions.push(
       createAssociatedTokenAccountInstruction(
         owner,
         token_out_ata,
         new sol.PublicKey(recipient_address),
-        new sol.PublicKey(token_out),
-      ),
+        new sol.PublicKey(token_out)
+      )
     );
     instructions.push(
       makeAMMSwapInstruction({
@@ -389,7 +390,7 @@ export class RaydiumClient extends BaseDexClient {
         amountIn: amount_in,
         amountOut: amount_out,
         fixedSide: "in",
-      }),
+      })
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -397,8 +398,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID,
-      ),
+        TOKEN_PROGRAM_ID
+      )
     );
     instructions.push(
       createCloseAccountInstruction(
@@ -406,8 +407,8 @@ export class RaydiumClient extends BaseDexClient {
         owner,
         owner,
         [],
-        TOKEN_PROGRAM_ID,
-      ),
+        TOKEN_PROGRAM_ID
+      )
     );
     instructions.forEach((instruction) => {
       initialTx.add(instruction);
@@ -620,7 +621,7 @@ export class RaydiumClient extends BaseDexClient {
     const raydium = await this.getRaydiumsdk();
     const { amount_in, pool_key } = params;
 
-    let pool_info: PoolInfo;
+    let pool_info = {} as PoolInfo;
     pool_info.id = pool_key.id;
     pool_info.programId = pool_key.programId;
     pool_info.mintA = pool_key.mintA;
@@ -648,21 +649,23 @@ export class RaydiumClient extends BaseDexClient {
     return version_tx;
   }
 
-  async sellAll(pool_key:PoolKey) {
+  async sellAll(pool_key: PoolKey) {
     const raydium = await this.getRaydiumsdk();
-    const tokenBalance = await this.getTokenBalance(this.owner_address);
-    let pool_info: PoolInfo = {
-      id: "",
-      programId: "",
-      mintA: null,
-      mintB: null,
-      pooltype: []
-  };
-      pool_info.id = pool_key.id;
+    let pool_info = {} as PoolInfo;
+    pool_info.id = pool_key.id;
     pool_info.programId = pool_key.programId;
     pool_info.mintA = pool_key.mintA;
     pool_info.mintB = pool_key.mintB;
     pool_info.pooltype = [];
+
+    const sell_balance = await this.getTokenBalance(
+      this.owner_address,
+      pool_info.mintB.address
+    );
+
+    const amount_in = Math.floor(
+      sell_balance * Math.pow(10, pool_info.mintB.decimals)
+    );
 
     const token_in = pool_info.mintB.address;
     const token_out = pool_info.mintA.address;
@@ -671,7 +674,7 @@ export class RaydiumClient extends BaseDexClient {
     const version_tx = await this.buildSwapInstruction({
       token_in: token_in,
       token_out: token_out,
-      amount_in: new BN(tokenBalance),
+      amount_in: new BN(amount_in),
       amount_out: new BN(0),
       recipient_address: owner.toBase58(),
       pool_info: pool_info,
@@ -688,35 +691,82 @@ export class RaydiumClient extends BaseDexClient {
     const balance = balance_raw / 10 ** 9;
     return balance;
   }
-  
+
   async getTokenBalance(
     token_address: string,
-    address?: string,
+    address?: string
   ): Promise<number> {
     address = address || this.owner_address;
-    const connection = await this.getConnection();
-    if (this.isNative(token_address)) return await this.getBalance(address);
-
-    const owner_pubkey = new sol.PublicKey(address);
-    const token_mint_pubkey = new sol.PublicKey(token_address);
-    const accounts = await connection.getTokenAccountsByOwner(owner_pubkey, {
-      mint: token_mint_pubkey,
-    });
-    let total_balance = 0;
-    for (const account of accounts.value) {
-      const balance_raw = await connection.getTokenAccountBalance(
-        account.pubkey,
+    let bal: number;
+    if (this.isNative(token_address) || token_address === this.native_token) {
+      const payload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getBalance",
+        params: [
+          address,
+          {
+            encoding: "jsonParsed",
+            commitment: "confirmed",
+          },
+        ],
+      };
+      const resp = await axios.post(
+        "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e",
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
       );
-      const balance = balance_raw.value.uiAmount || 0;
-      total_balance += balance;
+      bal = resp.data.result.value / Math.pow(10, 9);
+    } else {
+      const token_account = await getAssociatedTokenAddress(
+        new sol.PublicKey(token_address),
+        new sol.PublicKey(address),
+        true
+      );
+      const payload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getTokenAccountBalance",
+        params: [
+          token_account,
+          {
+            commitment: "confirmed",
+          },
+        ],
+      };
+      const resp = await axios.post(
+        "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e",
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (!resp.data?.result) {
+        if (resp.data.error.message.includes("could not find account")) {
+          bal = 0;
+        } else {
+          throw Error(resp.data.error);
+        }
+      } else {
+        bal =
+          Number(resp.data.result.value.amount) /
+          Math.pow(10, resp.data.result.value.decimals);
+      }
     }
-    return +toFixed(total_balance, 9);
+
+    return bal;
   }
 
   isNative(address: string) {
-    if ( address === NATIVE_MINT.toBase58()) {
+    if (address === NATIVE_MINT.toBase58()) {
       return true;
-    }else {
+    } else {
       return false;
     }
   }

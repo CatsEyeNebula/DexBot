@@ -333,3 +333,12 @@ export class SolanaPoolTracker {
     }
 }
 
+const testTracker = async () => {
+    const tracker = new SolanaPoolTracker();
+    await tracker.run();
+}
+
+if (require.main === module) {
+    testTracker();    
+}
+

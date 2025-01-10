@@ -576,9 +576,9 @@ export class RaydiumClient extends BaseDexClient {
       ? params.recipient_address
       : owner.toBase58();
 
-    const mintIn =
+    const mintIn = //wsol
       side === SIDE.BUY ? pool_info.mintB.address : pool_info.mintA.address;
-    const mintOut =
+    const mintOut = //token 
       side === SIDE.BUY ? pool_info.mintA.address : pool_info.mintB.address;
     const decimals_in =
       side === SIDE.BUY ? pool_info.mintB.decimals : pool_info.mintA.decimals;

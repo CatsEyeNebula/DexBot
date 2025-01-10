@@ -11,22 +11,25 @@ import path from "path";
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const run = async () => {
+  
   const sender = getAddressFromMnemonic(process.env.SOLANA_BOT, 1);
-  console.log(sender)
   const privateKey = getPK(sender);
+  console.log("privateKey",privateKey);
+  const raydium = new RaydiumClient({
+    owner_address: sender,
+  });
   const secretKey = bs58.decode(privateKey);
   const keypair = Keypair.fromSecretKey(secretKey);
+
+
   console.log("address", keypair.publicKey.toBase58());
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
-  const raydium = new RaydiumClient({
-    owner_address: sender,
-  });
+  
 
   const params = {
     token_a: pool_key_info.mintB.address,
-    // token_a: "5f5o26isDtLmaHuMjpp1TKCLv9YJZLtFci6xbaJUpump",
     token_b: "So11111111111111111111111111111111111111112",
     side: SIDE.BUY,
     amount: 0.001,

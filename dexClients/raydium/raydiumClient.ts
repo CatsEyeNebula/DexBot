@@ -526,7 +526,7 @@ export class RaydiumClient extends BaseDexClient {
     const raydium = await this.getRaydiumsdk();
     const owner = raydium.account.scope.ownerPubKey;
 
-    let { token_a, token_b } = params;
+    let { token_a, token_b, create_ata } = params;
 
     const pair: PairSymbol = {
       token_a: token_a,
@@ -609,6 +609,7 @@ export class RaydiumClient extends BaseDexClient {
       recipient_address: recipient_address,
       pool_info: pool_info,
       pool_keys: pool_key_info,
+      create_ata: create_ata
     });
 
     return version_tx;
@@ -644,7 +645,7 @@ export class RaydiumClient extends BaseDexClient {
       recipient_address: owner.toBase58(),
       pool_info: pool_info,
       pool_keys: pool_key,
-      createAta: true
+      create_ata: true
     });
 
     return version_tx;
@@ -680,7 +681,7 @@ export class RaydiumClient extends BaseDexClient {
       recipient_address: owner.toBase58(),
       pool_info: pool_info,
       pool_keys: pool_key,
-      createAta: false
+      create_ata: false
     });
 
     return version_tx;

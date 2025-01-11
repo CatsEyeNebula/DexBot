@@ -86,7 +86,7 @@ export interface BuildSwapInstructionParams {
   recipient_address: string;
   pool_keys: PoolKey;
   pool_info: PoolInfo;
-  createAta: boolean;
+  create_ata: boolean;
 }
 
 export enum SWAP_ROUTER {
@@ -107,6 +107,7 @@ export interface SwapParams extends PairSymbol {
   permit2_nonce?: string;
   paths?: RoutePath[];
   pool_address?: PoolAddress;
+  create_ata: boolean;
   extra_params?: {
     nonce?: number;
     support_fee?: boolean;

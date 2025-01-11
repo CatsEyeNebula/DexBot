@@ -57,7 +57,7 @@ const run = async () => {
   console.log("snipe done ", hash);
 
   const sell_tx = await raydium.sellAll(pool_key_info);
-  snipe_tx.sign([keypair]);
+  sell_tx.sign([keypair]);
   const sell_rawTransaction = sell_tx.serialize();
   const sell_hash = await conection.sendRawTransaction(sell_rawTransaction, {
     maxRetries: 3,

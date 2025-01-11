@@ -644,6 +644,7 @@ export class RaydiumClient extends BaseDexClient {
       recipient_address: owner.toBase58(),
       pool_info: pool_info,
       pool_keys: pool_key,
+      createAta: true
     });
 
     return version_tx;
@@ -679,6 +680,7 @@ export class RaydiumClient extends BaseDexClient {
       recipient_address: owner.toBase58(),
       pool_info: pool_info,
       pool_keys: pool_key,
+      createAta: false
     });
 
     return version_tx;

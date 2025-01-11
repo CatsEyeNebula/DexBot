@@ -86,6 +86,7 @@ export interface BuildSwapInstructionParams {
   recipient_address: string;
   pool_keys: PoolKey;
   pool_info: PoolInfo;
+  createAta: boolean;
 }
 
 export enum SWAP_ROUTER {

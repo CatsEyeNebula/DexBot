@@ -376,6 +376,7 @@ export class RaydiumClient extends BaseDexClient {
       pool_info,
       recipient_address,
       create_ata,
+      fixed_side
     } = params;
 
     const is_quote_in = token_in === this.native_token ? true : false;
@@ -524,7 +525,7 @@ export class RaydiumClient extends BaseDexClient {
         },
         amountIn: amount_in,
         amountOut: amount_out,
-        fixedSide: "in",
+        fixedSide: fixed_side,
       })
     );
     instructions.forEach((instruction) => {
@@ -624,6 +625,8 @@ export class RaydiumClient extends BaseDexClient {
 
     amount_in = Math.floor(amount_in * Math.pow(10, decimals_in));
     amount_out = Math.floor(amount_out * Math.pow(10, decimals_out));
+
+    console.log(`amount_in: ${amount_in}, amount_out: ${amount_out}`);
 
     const version_tx = await this.buildSwapTx({
       token_in: mintIn,

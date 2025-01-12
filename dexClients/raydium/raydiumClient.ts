@@ -300,7 +300,6 @@ export class RaydiumClient extends BaseDexClient {
       pool_info,
       recipient_address,
       create_ata,
-      // is_quote_in,
     } = params;
 
     const is_quote_in = token_in === this.native_token ? true : false;

@@ -89,6 +89,37 @@ export interface BuildSwapInstructionParams {
   create_ata: boolean;
 }
 
+export enum FIXED_SIDE {
+  IN = "in",
+  OUT = "out"
+}
+
+export interface BuildBuySwapParams {
+  token_in: string;
+  token_out: string;
+  amount_in: BN;
+  amount_out: BN;
+  recipient_address: string;
+  pool_keys: PoolKey;
+  pool_info: PoolInfo;
+  create_ata: boolean;
+  is_quote_in: boolean;
+  fixed_side?: FIXED_SIDE
+}
+
+export interface BuildSellSwapParams {
+  token_in: string;
+  token_out: string;
+  amount_in: BN;
+  amount_out: BN;
+  recipient_address: string;
+  pool_keys: PoolKey;
+  pool_info: PoolInfo;
+  create_ata: boolean;
+  is_quote_in: boolean;
+  fixed_side?: FIXED_SIDE
+}
+
 export enum SWAP_ROUTER {
   DEFAULT = "default",
   UNIVERSAL_ROUTER = "universal_router",

@@ -18,6 +18,7 @@ const snipeTx = async () => {
     is_token_b_amount: false,
     slippage: 0.5,
     recipient_address: "2P93ZPcq6zxGbUyTYUqhSyY9qfJWCczEPt1EPEQM3nNZ",
+    create_ata: true
   };
   const swap = await raydium.swap(params);
   console.log(swap);

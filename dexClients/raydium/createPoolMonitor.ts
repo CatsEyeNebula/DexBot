@@ -6,6 +6,7 @@ import {
 } from "@solana/web3.js";
 import { PoolKey, Reserves } from "./types";
 import { RedisUtil } from "../../utils/redis";
+import { MARKET_STATE_LAYOUT_V2 } from "@raydium-io/raydium-sdk-v2";
 
 export const RAYDIUM_MIGRATION = "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg";
 export const RAYDIUM_LIQUIDITY = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
@@ -68,7 +69,7 @@ export class RaydiumCreatePoolMonitor {
             const parsed_tx = await this.parsedTargetSignature(signature);
             if (parsed_tx === null)
               throw new Error(`[RAYDIUM] [parsedTargetSignature] failed!`);
-            const pool_key_info = this.constructPoolInfo(parsed_tx);
+            const pool_key_info = await this.constructPoolInfo(parsed_tx);
             const reverses = this.fetchInitialReserves(
               parsed_tx,
               pool_key_info
@@ -85,7 +86,7 @@ export class RaydiumCreatePoolMonitor {
               pair_cache_key_reverse,
               JSON.stringify(pool_key_info)
             );
-            
+
             this.connection.removeOnLogsListener(listenerId);
             resolve({ pool_key_info, reverses });
           }
@@ -104,7 +105,9 @@ export class RaydiumCreatePoolMonitor {
     return parsed_tx;
   }
 
-  constructPoolInfo(parsed_tx: ParsedTransactionWithMeta): PoolKey {
+  async constructPoolInfo(
+    parsed_tx: ParsedTransactionWithMeta
+  ): Promise<PoolKey> {
     let pool_key_info = {} as PoolKey;
     let init_accounts: PublicKey[];
     let message_accounts: ParsedMessageAccount[];
@@ -152,6 +155,57 @@ export class RaydiumCreatePoolMonitor {
     pool_key_info["marketAuthority"] = marketAuthority.toBase58();
     return pool_key_info;
   }
+
+  // async constructPoolInfo(parsed_tx: ParsedTransactionWithMeta): Promise<PoolKey> {
+  //   let pool_key_info = {} as PoolKey;
+  //   let init_accounts: PublicKey[];
+  //   let message_accounts: ParsedMessageAccount[];
+
+  //   message_accounts = parsed_tx.transaction.message.accountKeys;
+  //   parsed_tx.transaction.message.instructions.forEach((instruction) => {
+  //     if (instruction.programId.toBase58() === RAYDIUM_LIQUIDITY) {
+  //       if (!("accounts" in instruction)) {
+  //         throw new Error(`[RAYDIUM] [instruction] don\`t have accounts!`);
+  //       }
+  //       init_accounts = instruction.accounts;
+  //     }
+  //   });
+
+  //   const market_id = init_accounts[16];
+  //   const marketProgramId = init_accounts[15];
+  //   const marketAuthority = this.getAssociatedAuthority(
+  //     marketProgramId,
+  //     market_id
+  //   ).publicKey;
+  //   const account_info = await this.connection.getAccountInfo(market_id);
+  //   const market_info = MARKET_STATE_LAYOUT_V2.decode(account_info.data);
+  //   pool_key_info["id"] = init_accounts[4].toBase58();
+  //   pool_key_info["authority"] = init_accounts[5].toBase58();
+  //   pool_key_info["openOrders"] = init_accounts[6].toBase58();
+  //   pool_key_info["targetOrders"] = init_accounts[12].toBase58();
+  //   pool_key_info["vault"] = {
+  //     A: init_accounts[10].toBase58(),
+  //     B: init_accounts[11].toBase58(),
+  //   };
+  //   pool_key_info["marketProgramId"] = init_accounts[15].toBase58();
+  //   pool_key_info["marketId"] = init_accounts[16].toBase58();
+  //   pool_key_info["mintA"] = {
+  //     address: init_accounts[8].toBase58(),
+  //     decimals: 9,
+  //   };
+  //   pool_key_info["mintB"] = {
+  //     address: init_accounts[9].toBase58(),
+  //     decimals: 6,
+  //   };
+  //   pool_key_info["programId"] = RAYDIUM_LIQUIDITY;
+  //   pool_key_info["marketBids"] = market_info.bids.toBase58();
+  //   pool_key_info["marketAsks"] = market_info.asks.toBase58();
+  //   pool_key_info["marketEventQueue"] = market_info.eventQueue.toBase58();
+  //   pool_key_info["marketBaseVault"] = market_info.baseVault.toBase58();
+  //   pool_key_info["marketQuoteVault"] = market_info.quoteVault.toBase58();
+  //   pool_key_info["marketAuthority"] = marketAuthority.toBase58();
+  //   return pool_key_info;
+  // }
 
   fetchInitialReserves(
     parsed_tx: ParsedTransactionWithMeta,

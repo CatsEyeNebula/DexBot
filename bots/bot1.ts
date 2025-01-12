@@ -1,6 +1,6 @@
 import { RaydiumCreatePoolMonitor } from "../dexClients/raydium/createPoolMonitor";
 import { RaydiumClient } from "../dexClients/raydium/raydiumClient";
-import { SIDE } from "../dexClients/raydium/types";
+import { PoolKey, SIDE } from "../dexClients/raydium/types";
 import { getPK } from "../mnemonic/pk";
 import { getAddressFromMnemonic } from "../mnemonic/solana";
 import { Keypair } from "@solana/web3.js";
@@ -11,7 +11,6 @@ import path from "path";
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const run = async () => {
-  
   const sender = getAddressFromMnemonic(process.env.SOLANA_BOT, 1);
   console.log(sender);
   const privateKey = getPK(sender);
@@ -19,36 +18,40 @@ const run = async () => {
   const raydium = new RaydiumClient({
     owner_address: sender,
   });
+  const conection = await raydium.getConnection();
   const secretKey = bs58.decode(privateKey);
   const keypair = Keypair.fromSecretKey(secretKey);
 
-
   console.log("address", keypair.publicKey.toBase58());
-
 
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
+  // const pool_info_str = await raydium.redis.get(
+  //   "pool_key_info-7jSAPcsSN2P9sgyoshVCsUi7a71SKRU6KiqD5oWrpump-So11111111111111111111111111111111111111112"
+  // );
+  // const pool_key_info: PoolKey = JSON.parse(pool_info_str);
+  // console.log(pool_key_info);
 
-  // const params = {
-  //   token_a: pool_key_info.mintB.address,
-  //   // token_a: "5f5o26isDtLmaHuMjpp1TKCLv9YJZLtFci6xbaJUpump",
+  // const snipe_tx = await raydium.swapOld({
+  //   // token_a: pool_key_info.mintB.address,
+  //   token_a: "7jSAPcsSN2P9sgyoshVCsUi7a71SKRU6KiqD5oWrpump",
   //   token_b: "So11111111111111111111111111111111111111112",
-  //   side: SIDE.BUY,
-  //   amount: 0.001,
-  //   is_token_b_amount: true,
+  //   side: SIDE.SELL,
+  //   amount: 600,
+  //   is_token_b_amount: false,
   //   slippage: 0.5,
-  // };
-  // const snipe_tx = await raydium.swap(params);
+  //   create_ata: false,
+  // });
+  // console.log(snipe_tx);
+
   const snipe_tx = await raydium.snipe({
     amount_in: 0.001,
     pool_key: pool_key_info,
   });
 
   snipe_tx.sign([keypair]);
-
   const rawTransaction = snipe_tx.serialize();
-  const conection = await raydium.getConnection();
   const hash = await conection.sendRawTransaction(rawTransaction, {
     maxRetries: 3,
     skipPreflight: true,

@@ -71,6 +71,15 @@ export class RaydiumClient extends BaseDexClient {
     return connection;
   }
 
+  async getMinRent(): Promise<number> {
+    const connection = await this.getConnection();
+    const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+      splAccountLayout.span,
+      "confirmed",
+    );
+    return balanceNeeded;
+  }
+
   async getBalance(address?: string): Promise<number> {
     address = address || this.owner_address;
     const connection = await this.getConnection();

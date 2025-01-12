@@ -78,46 +78,16 @@ export interface PoolInfo {
   pooltype: string[];
 }
 
-export interface BuildSwapInstructionParams {
-  token_in: string;
-  token_out: string;
-  amount_in: BN;
-  amount_out: BN;
-  recipient_address: string;
-  pool_keys: PoolKey;
-  pool_info: PoolInfo;
-  create_ata: boolean;
+export interface ClientParams {
+  chain_id?: CHAIN_ID;
+  owner_address: string;
+  private_key?: string;
+  rpc?: string;
 }
 
 export enum FIXED_SIDE {
   IN = "in",
   OUT = "out"
-}
-
-export interface BuildBuySwapParams {
-  token_in: string;
-  token_out: string;
-  amount_in: BN;
-  amount_out: BN;
-  recipient_address: string;
-  pool_keys: PoolKey;
-  pool_info: PoolInfo;
-  create_ata: boolean;
-  is_quote_in: boolean;
-  fixed_side?: FIXED_SIDE
-}
-
-export interface BuildSellSwapParams {
-  token_in: string;
-  token_out: string;
-  amount_in: BN;
-  amount_out: BN;
-  recipient_address: string;
-  pool_keys: PoolKey;
-  pool_info: PoolInfo;
-  create_ata: boolean;
-  is_quote_in: boolean;
-  fixed_side?: FIXED_SIDE
 }
 
 export enum SWAP_ROUTER {
@@ -139,6 +109,7 @@ export interface SwapParams extends PairSymbol {
   paths?: RoutePath[];
   pool_address?: PoolAddress;
   create_ata: boolean;
+  fixed_side?: FIXED_SIDE;
   extra_params?: {
     nonce?: number;
     support_fee?: boolean;
@@ -146,14 +117,19 @@ export interface SwapParams extends PairSymbol {
   };
 }
 
+export interface BuildSwapTxParams {
+  token_in: string;
+  token_out: string;
+  amount_in: BN;
+  amount_out: BN;
+  recipient_address: string;
+  pool_keys: PoolKey;
+  pool_info: PoolInfo;
+  create_ata: boolean;
+  fixed_side: FIXED_SIDE;
+}
+
 export interface Reserves {
   [token_address: string]: number,
   timestamp?: number;
-}
-
-export interface ClientParams {
-  chain_id?: CHAIN_ID;
-  owner_address: string;
-  private_key?: string;
-  rpc?: string;
 }

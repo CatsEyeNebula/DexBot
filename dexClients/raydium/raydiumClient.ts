@@ -6,9 +6,7 @@ import sol, {
 } from "@solana/web3.js";
 import {
   Raydium,
-  TxVersion,
   ApiV3PoolInfoStandardItem,
-  TxV0BuildData,
   PoolFetchType,
   AmmV4Keys,
   AmmV5Keys,
@@ -19,10 +17,9 @@ import {
 } from "@raydium-io/raydium-sdk-v2";
 import { SONALA_RPC } from "../../constants";
 import {
-  BuildBuySwapParams,
-  BuildSellSwapParams,
-  BuildSwapInstructionParams,
+  BuildSwapTxParams,
   ClientParams,
+  FIXED_SIDE,
   GetPriceParams,
   PairSymbol,
   PoolAddress,
@@ -72,6 +69,85 @@ export class RaydiumClient extends BaseDexClient {
   async getConnection(): Promise<sol.Connection> {
     const connection = new sol.Connection(SONALA_RPC, "confirmed");
     return connection;
+  }
+
+  async getBalance(address?: string): Promise<number> {
+    address = address || this.owner_address;
+    const connection = await this.getConnection();
+    const balance_raw = await connection.getBalance(new sol.PublicKey(address));
+    const balance = balance_raw / 10 ** 9;
+    return balance;
+  }
+
+  async getTokenBalance(
+    token_address: string,
+    address?: string
+  ): Promise<number> {
+    address = address || this.owner_address;
+    let bal: number;
+    if (token_address === this.native_token) {
+      const payload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getBalance",
+        params: [
+          address,
+          {
+            encoding: "jsonParsed",
+            commitment: "confirmed",
+          },
+        ],
+      };
+      const resp = await axios.post(
+        "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e",
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      bal = resp.data.result.value / Math.pow(10, 9);
+    } else {
+      const token_account = await getAssociatedTokenAddress(
+        new sol.PublicKey(token_address),
+        new sol.PublicKey(address),
+        true
+      );
+      const payload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getTokenAccountBalance",
+        params: [
+          token_account,
+          {
+            commitment: "confirmed",
+          },
+        ],
+      };
+      const resp = await axios.post(
+        "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e",
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (!resp.data?.result) {
+        if (resp.data.error.message.includes("could not find account")) {
+          bal = 0;
+        } else {
+          throw Error(resp.data.error);
+        }
+      } else {
+        bal =
+          Number(resp.data.result.value.amount) /
+          Math.pow(10, resp.data.result.value.decimals);
+      }
+    }
+
+    return bal;
   }
 
   async getRaydiumsdk(): Promise<Raydium> {
@@ -285,8 +361,8 @@ export class RaydiumClient extends BaseDexClient {
     return price;
   }
 
-  async buildSwapInstruction(
-    params: BuildSwapInstructionParams
+  async buildSwapTx(
+    params: BuildSwapTxParams
   ): Promise<sol.VersionedTransaction> {
     const raydium = await this.getRaydiumsdk();
     const connection = await this.getConnection();
@@ -466,144 +542,6 @@ export class RaydiumClient extends BaseDexClient {
     return versionedTransaction;
   }
 
-  async buildBuySwap(params: BuildBuySwapParams) {
-    const raydium = await this.getRaydiumsdk();
-    const connection = await this.getConnection();
-    const owner = raydium.account.scope.ownerPubKey;
-    const {
-      token_in,
-      token_out,
-      amount_in,
-      amount_out,
-      pool_keys,
-      pool_info,
-      create_ata,
-      fixed_side,
-      recipient_address,
-    } = params;
-
-    const modifyComputeUnits = sol.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 5000000,
-    });
-    const addPriorityFee = sol.ComputeBudgetProgram.setComputeUnitPrice({
-      microLamports: 1000000,
-    });
-    const latestBlockhash = await connection.getLatestBlockhash();
-    let initialTx = new sol.Transaction({
-      recentBlockhash: latestBlockhash.blockhash,
-      feePayer: owner,
-    })
-      .add(modifyComputeUnits)
-      .add(addPriorityFee);
-
-    let instructions: TransactionInstruction[] = [];
-    let version = 4;
-    if (pool_info.pooltype.includes("StablePool")) version = 5;
-
-    const token_in_ata = await getAssociatedTokenAddress(
-      new sol.PublicKey(token_in),
-      owner,
-      true
-    );
-    const token_out_ata = await getAssociatedTokenAddress(
-      new sol.PublicKey(token_out),
-      new sol.PublicKey(recipient_address),
-      true
-    );
-    instructions.push(
-      createAssociatedTokenAccountInstruction(
-        owner,
-        token_in_ata,
-        owner,
-        new sol.PublicKey(token_in)
-      )
-    );
-    const balanceNeeded = MIN_BALANCE_FOR_RENT;
-    const lamports = parseBigNumberish(amount_in).add(new BN(balanceNeeded));
-    const newAccount = generatePubKey({
-      fromPublicKey: owner,
-      programId: TOKEN_PROGRAM_ID,
-    });
-    instructions.push(
-      SystemProgram.createAccountWithSeed({
-        fromPubkey: owner,
-        basePubkey: owner,
-        seed: newAccount.seed,
-        newAccountPubkey: newAccount.publicKey,
-        lamports: lamports.toNumber(),
-        space: splAccountLayout.span,
-        programId: TOKEN_PROGRAM_ID,
-      })
-    );
-    instructions.push(
-      createInitializeAccountInstruction(
-        newAccount.publicKey,
-        new sol.PublicKey(token_in),
-        owner
-      )
-    );
-    instructions.push(
-      createTransferInstruction(
-        newAccount.publicKey,
-        token_in_ata,
-        owner,
-        BigInt(String(amount_in))
-      )
-    );
-    if (create_ata) {
-      instructions.push(
-        createAssociatedTokenAccountInstruction(
-          owner,
-          token_out_ata,
-          new sol.PublicKey(recipient_address),
-          new sol.PublicKey(token_out)
-        )
-      );
-    }
-    instructions.push(
-      makeAMMSwapInstruction({
-        version,
-        poolKeys: pool_keys as any,
-        userKeys: {
-          tokenAccountIn: token_in_ata!,
-          tokenAccountOut: token_out_ata!,
-          owner: owner,
-        },
-        amountIn: amount_in,
-        amountOut: amount_out,
-        fixedSide: fixed_side,
-      })
-    );
-    instructions.push(
-      createCloseAccountInstruction(
-        newAccount.publicKey,
-        owner,
-        owner,
-        [],
-        TOKEN_PROGRAM_ID
-      )
-    );
-    instructions.push(
-      createCloseAccountInstruction(
-        token_in_ata,
-        owner,
-        owner,
-        [],
-        TOKEN_PROGRAM_ID
-      )
-    );
-    instructions.forEach((instruction) => {
-      initialTx.add(instruction);
-    });
-    const messageV0 = new sol.TransactionMessage({
-      payerKey: new sol.PublicKey(this.owner_address),
-      recentBlockhash: latestBlockhash.blockhash,
-      instructions: initialTx.instructions,
-    }).compileToV0Message();
-    const versionedTransaction = new sol.VersionedTransaction(messageV0);
-    return versionedTransaction;
-  }
-
   async swap(params: SwapParams): Promise<sol.VersionedTransaction> {
     if (!this.owner_address) {
       throw new Error(`[RAYDIUM] [swap] require owner_address!`);
@@ -661,6 +599,7 @@ export class RaydiumClient extends BaseDexClient {
     const recipient_address = params.recipient_address
       ? params.recipient_address
       : owner.toBase58();
+    const fixed_side = params.fixed_side ? params.fixed_side : FIXED_SIDE.IN;
 
     const mintIn = //wsol
       side === SIDE.BUY ? pool_info.mintB.address : pool_info.mintA.address;
@@ -686,7 +625,7 @@ export class RaydiumClient extends BaseDexClient {
     amount_in = Math.floor(amount_in * Math.pow(10, decimals_in));
     amount_out = Math.floor(amount_out * Math.pow(10, decimals_out));
 
-    const version_tx = await this.buildSwapInstruction({
+    const version_tx = await this.buildSwapTx({
       token_in: mintIn,
       token_out: mintOut,
       amount_in: new BN(amount_in),
@@ -695,6 +634,7 @@ export class RaydiumClient extends BaseDexClient {
       pool_info: pool_info,
       pool_keys: pool_key_info,
       create_ata: create_ata,
+      fixed_side: fixed_side,
     });
 
     return version_tx;
@@ -722,7 +662,7 @@ export class RaydiumClient extends BaseDexClient {
     const token_out = pool_info.mintB.address;
     const owner = raydium.account.scope.ownerPubKey;
 
-    const version_tx = await this.buildSwapInstruction({
+    const version_tx = await this.buildSwapTx({
       token_in: token_in,
       token_out: token_out,
       amount_in: new BN(amount_in_bg),
@@ -731,6 +671,7 @@ export class RaydiumClient extends BaseDexClient {
       pool_info: pool_info,
       pool_keys: pool_key,
       create_ata: true,
+      fixed_side: FIXED_SIDE.IN,
     });
 
     return version_tx;
@@ -747,19 +688,19 @@ export class RaydiumClient extends BaseDexClient {
 
     const sell_balance = await this.getTokenBalance(
       pool_info.mintB.address,
-      this.owner_address,
+      this.owner_address
     );
 
     const amount_in = Math.floor(
       sell_balance * Math.pow(10, pool_info.mintB.decimals)
     );
-    
+
     const token_in = pool_info.mintB.address;
     const token_out = pool_info.mintA.address;
     const owner = raydium.account.scope.ownerPubKey;
-    console.log(`amount_in:`, amount_in)
+    console.log(`amount_in:`, amount_in);
 
-    const version_tx = await this.buildSwapInstruction({
+    const version_tx = await this.buildSwapTx({
       token_in: token_in,
       token_out: token_out,
       amount_in: new BN(amount_in - 1),
@@ -768,87 +709,9 @@ export class RaydiumClient extends BaseDexClient {
       pool_info: pool_info,
       pool_keys: pool_key,
       create_ata: false,
+      fixed_side: FIXED_SIDE.IN,
     });
 
     return version_tx;
-  }
-
-  async getBalance(address?: string): Promise<number> {
-    address = address || this.owner_address;
-    const connection = await this.getConnection();
-    const balance_raw = await connection.getBalance(new sol.PublicKey(address));
-    const balance = balance_raw / 10 ** 9;
-    return balance;
-  }
-
-  async getTokenBalance(
-    token_address: string,
-    address?: string,
-  ): Promise<number> {
-    address = address || this.owner_address;
-    let bal: number;
-    if (token_address === this.native_token) {
-      const payload = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "getBalance",
-        params: [
-          address,
-          {
-            encoding: "jsonParsed",
-            commitment: "confirmed",
-          },
-        ],
-      };
-      const resp = await axios.post(
-        "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e",
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      bal = resp.data.result.value / Math.pow(10, 9);
-    } else {
-      const token_account = await getAssociatedTokenAddress(
-        new sol.PublicKey(token_address),
-        new sol.PublicKey(address),
-        true,
-      );
-      const payload = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "getTokenAccountBalance",
-        params: [
-          token_account,
-          {
-            commitment: "confirmed",
-          },
-        ],
-      };
-      const resp = await axios.post(
-        "https://mainnet.helius-rpc.com/?api-key=3d02a593-0446-4e23-8237-cd47778f995e",
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      if (!resp.data?.result) {
-        if (resp.data.error.message.includes("could not find account")) {
-          bal = 0;
-        } else {
-          throw Error(resp.data.error);
-        }
-      } else {
-        bal =
-          Number(resp.data.result.value.amount) /
-          Math.pow(10, resp.data.result.value.decimals);
-      }
-    }
-
-    return bal;
   }
 }

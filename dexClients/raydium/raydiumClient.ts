@@ -710,7 +710,6 @@ export class RaydiumClient extends BaseDexClient {
     const token_in = pool_info.mintB.address;
     const token_out = pool_info.mintA.address;
     const owner = raydium.account.scope.ownerPubKey;
-    console.log(`amount_in:`, amount_in);
 
     const version_tx = await this.buildSwapTx({
       token_in: token_in,

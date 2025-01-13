@@ -27,8 +27,7 @@ const run = async () => {
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
-
-
+ 
   const snipe_tx = await raydium.snipe({
     amount_in: 0.001,
     pool_key: pool_key_info,

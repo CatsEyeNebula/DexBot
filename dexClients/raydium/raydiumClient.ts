@@ -59,11 +59,11 @@ export class RaydiumClient extends BaseDexClient {
   constructor(params: ClientParams) {
     super(params);
     this.poolTracker = new SolanaPoolTracker();
-    this.redis = new RedisUtil({
-      host: "localhost",
-      port: "6379",
-      db: 0,
-    });
+    // this.redis = new RedisUtil({
+    //   host: "localhost",
+    //   port: "6379",
+    //   db: 0,
+    // });
   }
 
   async getConnection(): Promise<sol.Connection> {

@@ -11,15 +11,16 @@ import path from "path";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
+// 有一个主要的入口， 进程中只允许同时间最多存在10个bot， 然后一直循环进程 如果有bot消失了那么就新开一个bot
 const run = async () => {
   const sender = getAddressFromMnemonic(process.env.SOLANA_BOT, 1);
   console.log(sender);
-  const privateKey = getPK(sender);
+  const private_key = getPK(sender);
   const raydium = new RaydiumClient({
     owner_address: sender,
   });
   const conection = await raydium.getConnection();
-  const secretKey = bs58.decode(privateKey);
+  const secretKey = bs58.decode(private_key);
   const keypair = Keypair.fromSecretKey(secretKey);
 
   console.log("address", keypair.publicKey.toBase58());
@@ -27,7 +28,7 @@ const run = async () => {
   const monitor = new RaydiumCreatePoolMonitor();
   const { pool_key_info, reverses } = await monitor.monitor();
   console.log(pool_key_info, reverses);
- 
+
   const snipe_tx = await raydium.snipe({
     amount_in: 0.001,
     pool_key: pool_key_info,
@@ -50,7 +51,7 @@ const run = async () => {
     skipPreflight: true,
     preflightCommitment: "confirmed",
   });
-  console.log("sellAll done ", sell_hash);
+  console.log("sell done ", sell_hash);
 };
 
 if (require.main === module) {
